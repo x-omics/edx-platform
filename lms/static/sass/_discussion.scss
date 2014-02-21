@@ -1874,6 +1874,9 @@ body.discussion {
       width: 100%;
       box-shadow: 0 1px 1px $shadow-l1;
       text-align: left;
+      @include animation(fadeIn .3s);
+      width: 100%;
+      padding-left: 30px;
 
       &:hover, &:focus {
         @include linear-gradient(top, $white 35%, #ddd);
@@ -2433,6 +2436,7 @@ body.discussion {
       float:right;
       padding-right: 5px;
       font-style: italic;
+      cursor: pointer;
       margin-right: $baseline/2;
       opacity: 0.8;
 
