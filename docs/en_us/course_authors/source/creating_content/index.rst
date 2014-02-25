@@ -18,4 +18,4 @@ Creating Course Content
    create_video
    create_discussion
    create_problem
-
+   content_experiments
