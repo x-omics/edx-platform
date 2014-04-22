@@ -248,10 +248,6 @@ FEATURES = {
 
     # Turn off Advanced Security by default
     'ADVANCED_SECURITY': False,
-
-    # Show a "Download your certificate" on the Progress page if the lowest
-    # nonzero grade cutoff is met
-    'SHOW_PROGRESS_SUCCESS_BUTTON': False,
 }
 
 # Used for A/B testing
@@ -550,9 +546,9 @@ FAVICON_PATH = 'images/favicon.ico'
 
 # Locale/Internationalization
 TIME_ZONE = 'America/New_York'  # http://en.wikipedia.org/wiki/List_of_tz_zones_by_name
-LANGUAGE_CODE = 'en'  # http://www.i18nguy.com/unicode/language-identifiers.html
+LANGUAGE_CODE = 'en@rtl'  # http://www.i18nguy.com/unicode/language-identifiers.html
 # these languages display right to left
-LANGUAGES_BIDI = ("en@rtl", "he", "ar", "fa")
+LANGUAGES_BIDI = ("en@rtl", "he", "ar", "fa", "fa-ir", "ur")
 
 # Sourced from http://www.localeplanet.com/icu/ and wikipedia
 LANGUAGES = (
@@ -593,7 +589,7 @@ LANGUAGES = (
     ('hi', u'हिन्दी'),  # Hindi
     ('hr', u'hrvatski'),  # Croatian
     ('hu', u'magyar'),  # Hungarian
-    ('hy-am', u'Հայերեն (Հայաստան)'),  # Armenian (Armenia)
+    ('hy-am', u'Հայերէն (Հայաստանի Հանրապետութիւն)'),  # Armenian (Armenia)
     ('id', u'Bahasa Indonesia'),  # Indonesian
     ('it-it', u'Italiano (Italia)'),  # Italian (Italy)
     ('ja-jp', u'日本語(日本)'),  # Japanese (Japan)
@@ -1322,11 +1318,6 @@ GRADES_DOWNLOAD = {
     'BUCKET': 'edx-grades',
     'ROOT_PATH': '/tmp/edx-s3/grades',
 }
-
-######################## PROGRESS SUCCESS BUTTON ##############################
-# The following fields are available in the URL: {course_id} {student_id}
-PROGRESS_SUCCESS_BUTTON_URL = 'http://<domain>/<path>/{course_id}'
-PROGRESS_SUCCESS_BUTTON_TEXT_OVERRIDE = None
 
 #### PASSWORD POLICY SETTINGS #####
 
