@@ -1605,10 +1605,12 @@ msgstr "الاسم "
 msgid "Username"
 msgstr "اسم المستخدم"
 
+#: lms/djangoapps/class_dashboard/dashboard_data.py
 #: lms/templates/instructor/instructor_dashboard_2/metrics.html
 msgid "Grade"
 msgstr "الدرجة"
 
+#: lms/djangoapps/class_dashboard/dashboard_data.py
 #: lms/templates/instructor/instructor_dashboard_2/metrics.html
 msgid "Percent"
 msgstr "النسبة"
@@ -1631,6 +1633,7 @@ msgstr ""
 msgid "subsections"
 msgstr ""
 
+#: lms/djangoapps/class_dashboard/dashboard_data.py
 #: lms/templates/courseware/instructor_dashboard.html
 #: lms/templates/courseware/instructor_dashboard.html
 #: lms/templates/instructor/instructor_dashboard_2/analytics.html
@@ -1645,6 +1648,7 @@ msgstr ""
 msgid "% of Students"
 msgstr ""
 
+#: lms/djangoapps/class_dashboard/dashboard_data.py
 #: lms/templates/folditchallenge.html
 msgid "Score"
 msgstr "النتيجة"
@@ -6454,12 +6458,12 @@ msgstr "تخطي ما بعد التقييم"
 #: lms/templates/combinedopenended/openended/open_ended_combined_rubric.html
 msgid "{num} point: {explanatory_text}"
 msgid_plural "{num} points: {explanatory_text}"
-msgstr[0] ""
-msgstr[1] ""
-msgstr[2] ""
-msgstr[3] ""
-msgstr[4] ""
-msgstr[5] ""
+msgstr[0] "{num} نقطة: {explanatory_text}"
+msgstr[1] "{num} نقطة: {explanatory_text}"
+msgstr[2] "{num} نقطتان: {explanatory_text}"
+msgstr[3] "{num} نقاط: {explanatory_text}"
+msgstr[4] "{num} نقاط: {explanatory_text}"
+msgstr[5] "{num} نقاط: {explanatory_text}"
 
 #: lms/templates/combinedopenended/openended/open_ended_error.html
 msgid "There was an error with your submission.  Please contact course staff."
@@ -6478,12 +6482,12 @@ msgstr "قم باختيار المعيار الذي يمثل هذا التسلي
 #: lms/templates/combinedopenended/openended/open_ended_rubric.html
 msgid "{num} point: {text}"
 msgid_plural "{num} points: {text}"
-msgstr[0] ""
-msgstr[1] ""
-msgstr[2] ""
-msgstr[3] ""
-msgstr[4] ""
-msgstr[5] ""
+msgstr[0] "{num} نقطة: {text}"
+msgstr[1] "{num} نقطة: {text}"
+msgstr[2] "{num} نقطتان: {text}"
+msgstr[3] "{num} نقط: {text}"
+msgstr[4] "{num} نقط: {text}"
+msgstr[5] "{num} نقاط: {text}"
 
 #: lms/templates/combinedopenended/selfassessment/self_assessment_hint.html
 msgid "Please enter a hint below:"
@@ -8021,12 +8025,12 @@ msgstr ","
 #: lms/templates/discussion/_user_profile.html
 msgid "%s discussion started"
 msgid_plural "%s discussions started"
-msgstr[0] ""
-msgstr[1] ""
-msgstr[2] ""
-msgstr[3] ""
-msgstr[4] ""
-msgstr[5] ""
+msgstr[0] "%s بدأ النقاش"
+msgstr[1] "%s بدأ النقاش"
+msgstr[2] "%s بدأ النقاش"
+msgstr[3] "%s بدأ النقاش"
+msgstr[4] "%s بدأ النقاش"
+msgstr[5] "%s بدأ النقاش"
 
 #: lms/templates/discussion/_user_profile.html
 msgid "%s comment"

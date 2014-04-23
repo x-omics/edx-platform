@@ -702,12 +702,12 @@ msgstr "حوالي السنة"
 #: common/static/js/src/jquery.timeago.locale.js
 msgid "%d year"
 msgid_plural "%d years"
-msgstr[0] ""
-msgstr[1] ""
-msgstr[2] ""
-msgstr[3] ""
-msgstr[4] ""
-msgstr[5] ""
+msgstr[0] "%d سنة"
+msgstr[1] "%d سنة"
+msgstr[2] "%d سنة"
+msgstr[3] "%d سنوات"
+msgstr[4] "%d سنة"
+msgstr[5] "%d سنة"
 
 #: lms/static/admin/js/SelectFilter2.js
 msgid "Available %s"
@@ -1558,11 +1558,11 @@ msgstr ""
 
 #: lms/templates/class_dashboard/d3_stacked_bar_graph.js
 msgid "students"
-msgstr ""
+msgstr "الطلاب"
 
 #: lms/templates/class_dashboard/d3_stacked_bar_graph.js
 msgid "questions"
-msgstr ""
+msgstr "الأسئلة"
 
 #: lms/templates/class_dashboard/d3_stacked_bar_graph.js
 msgid "Number of Students"

@@ -115,7 +115,8 @@ def main(strict=True, verbosity=1):
     """
     Main entry point for script
     """
-    for locale in CONFIGURATION.translated_locales:
+    rtl_langs = ['he', 'ar', 'fa', 'fa_IR', 'ur']
+    for locale in rtl_langs:
         merge_files(locale, fail_if_missing=strict)
     # Dummy text is not required. Don't raise exception if files are missing.
     for locale in CONFIGURATION.dummy_locales:
