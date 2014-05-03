@@ -181,7 +181,7 @@ class LoncapaProblem(object):
         # Run response late_transforms last (see MultipleChoiceResponse)
         # Sort the responses to be in *_1 *_2 ... order.
         responses = self.responders.values()
-        responses = sorted(responses, key = lambda resp: int(resp.id[resp.id.rindex('_')+1:]) )
+        responses = sorted(responses, key=lambda resp: int(resp.id[resp.id.rindex('_') + 1:]))
         for response in responses:
             if hasattr(response, 'late_transforms'):
                 response.late_transforms(self)
@@ -434,13 +434,12 @@ class LoncapaProblem(object):
         Does nothing if there is no targeted-feedback attribute.
         """
         for mult_choice_response in tree.xpath('//multiplechoiceresponse[@targeted-feedback]'):
-            show_explanation = mult_choice_response.get('targeted-feedback') == 'alwaysShowCorrectChoiceExplanation'
-
-            # Avoid modifying the tree again if targeted_feedback has already run --
-            # do this by setting a targeted-done attribute in the tree.
-            if mult_choice_response.get('targeted-done') is not None:
+            # Note that the modifications has been done, avoiding problems if called twice.
+            if hasattr(self, 'has_targeted'):
                 continue
-            mult_choice_response.set('targeted-done', 'done')
+            self.has_targeted = True  # pylint: disable=W0201
+
+            show_explanation = mult_choice_response.get('targeted-feedback') == 'alwaysShowCorrectChoiceExplanation'
 
             # Grab the first choicegroup (there should only be one within each <multiplechoiceresponse> tag)
             choicegroup = mult_choice_response.xpath('./choicegroup[@type="MultipleChoice"]')[0]
@@ -681,7 +680,8 @@ class LoncapaProblem(object):
             # other than to examine .tag to see if it's a string. :(
             return
 
-        if (problemtree.tag == 'script' and problemtree.get('type') and 'javascript' in problemtree.get('type')):
+        if (problemtree.tag == 'script' and problemtree.get('type')
+            and 'javascript' in problemtree.get('type')):
             # leave javascript intact.
             return deepcopy(problemtree)
 

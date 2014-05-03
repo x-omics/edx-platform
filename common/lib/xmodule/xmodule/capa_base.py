@@ -1,5 +1,6 @@
 """Implements basics of Capa, including class CapaModule."""
 import cgi
+import copy
 import datetime
 import hashlib
 import json
@@ -8,6 +9,13 @@ import os
 import traceback
 import struct
 import sys
+
+# We don't want to force a dependency on datadog, so make the import conditional
+try:
+    from dogapi import dog_stats_api
+except ImportError:
+    # pylint: disable=invalid-name
+    dog_stats_api = None
 
 from pkg_resources import resource_string
 
@@ -395,8 +403,8 @@ class CapaMixin(CapaFields):
         # The logic flow is a little odd so that _('xxx') strings can be found for
         # translation while also running _() just once for each string.
         _ = self.runtime.service(self, "i18n").ugettext
-        check = _('Submit')
-        final_check = _('Final Submit')
+        check = _('Check')
+        final_check = _('Final Check')
 
         # Apply customizations if present
         if 'custom_check' in self.text_customization:
@@ -410,6 +418,24 @@ class CapaMixin(CapaFields):
             return final_check
         else:
             return check
+
+    def check_button_checking_name(self):
+        """
+        Return the "checking..." text for the "check" button.
+
+        After the user presses the "check" button, the button will briefly
+        display the value returned by this function until a response is
+        received by the server.
+
+        The text can be customized by the text_customization setting.
+
+        """
+        # Apply customizations if present
+        if 'custom_checking' in self.text_customization:
+            return self.text_customization.get('custom_checking')
+
+        _ = self.runtime.service(self, "i18n").ugettext
+        return _('Checking...')
 
     def should_show_check_button(self):
         """
@@ -569,13 +595,16 @@ class CapaMixin(CapaFields):
         except Exception as err:  # pylint: disable=broad-except
             html = self.handle_problem_html_error(err)
 
-        # The convention is to pass the name of the check button
-        # if we want to show a check button, and False otherwise
-        # This works because non-empty strings evaluate to True
+        # The convention is to pass the name of the check button if we want
+        # to show a check button, and False otherwise This works because
+        # non-empty strings evaluate to True.  We use the same convention
+        # for the "checking" state text.
         if self.should_show_check_button():
             check_button = self.check_button_name()
+            check_button_checking = self.check_button_checking_name()
         else:
             check_button = False
+            check_button_checking = False
 
         problem_is_timed = self.minutes_allowed > 0
 
@@ -605,6 +634,7 @@ class CapaMixin(CapaFields):
             'start_time': self.time_started,
             'end_time_to_display': end_time_to_display,
             'check_button': check_button,
+            'check_button_checking': check_button_checking,
             'reset_button': self.should_show_reset_button(),
             'save_button': self.should_show_save_button(),
             'answer_available': self.answer_available(),
@@ -781,7 +811,7 @@ class CapaMixin(CapaFields):
         """
         event_info = dict()
         event_info['problem_id'] = self.location.url()
-        self.runtime.track_function('showanswer', event_info)
+        self.track_function_unmask('showanswer', event_info)
         if not self.answer_available():
             raise NotFoundError('Answer is not available')
         else:
@@ -912,6 +942,7 @@ class CapaMixin(CapaFields):
 
         return {'grade': score['score'], 'max_grade': score['total']}
 
+    # pylint: disable=too-many-statements
     def check_problem(self, data, override_time=False):
         """
         Checks whether answers to a problem are correct
@@ -928,6 +959,7 @@ class CapaMixin(CapaFields):
         answers_without_files = convert_files_to_filenames(answers)
         event_info['answers'] = answers_without_files
 
+        metric_name = u'capa.check_problem.{}'.format
         # Can override current time
         current_time = datetime.datetime.now(UTC())
         if override_time is not False:
@@ -938,16 +970,21 @@ class CapaMixin(CapaFields):
         # Too late. Cannot submit
         if self.closed():
             event_info['failure'] = 'closed'
-            self.runtime.track_function('problem_check_fail', event_info)
+            self.track_function_unmask('problem_check_fail', event_info)
+            if dog_stats_api:
+                dog_stats_api.increment(metric_name('checks'), tags=[u'result:failed', u'failure:closed'])
             raise NotFoundError(_("Problem is closed."))
 
         # Problem submitted. Student should reset before checking again
         if self.done and self.rerandomize == "always":
             event_info['failure'] = 'unreset'
-            self.runtime.track_function('problem_check_fail', event_info)
+            self.track_function_unmask('problem_check_fail', event_info)
+            if dog_stats_api:
+                dog_stats_api.increment(metric_name('checks'), tags=[u'result:failed', u'failure:unreset'])
             raise NotFoundError(_("Problem must be reset before it can be checked again."))
 
         # Problem queued. Students must wait a specified waittime before they are allowed to submit
+        # IDEA: consider stealing code from below: pretty-print of seconds, cueing of time remaining
         if self.lcp.is_queued():
             prev_submit_time = self.lcp.get_recentmost_queuetime()
 
@@ -955,15 +992,21 @@ class CapaMixin(CapaFields):
             if (current_time - prev_submit_time).total_seconds() < waittime_between_requests:
                 msg = _(u"You must wait at least {wait} seconds between submissions.").format(
                     wait=waittime_between_requests)
-                return {'success': msg, 'html': ''}  # Prompts a modal dialog in ajax callback
+                return {'success': msg, 'html': ''}
 
-        # Wait time between resets
+        # Wait time between resets: check if is too soon for submission.
         if self.last_submission_time is not None and self.submission_wait_seconds != 0:
+             # pylint: disable=maybe-no-member
+             # pylint is unable to verify that .total_seconds() exists
             if (current_time - self.last_submission_time).total_seconds() < self.submission_wait_seconds:
-                seconds_left = int(self.submission_wait_seconds - (current_time - self.last_submission_time).total_seconds())
-                msg = u'You must wait at least {w} between submissions. {s} remaining.'.format(
-                    w=self.pretty_print_seconds(self.submission_wait_seconds), s=self.pretty_print_seconds(seconds_left))
-                return {'success': msg, 'html': ''}  # Prompts a modal dialog in ajax callback
+                remaining_secs = int(self.submission_wait_seconds - (current_time - self.last_submission_time).total_seconds())
+                msg = _(u'You must wait at least {wait_secs} between submissions. {remaining_secs} remaining.').format(
+                    wait_secs=self.pretty_print_seconds(self.submission_wait_seconds),
+                    remaining_secs=self.pretty_print_seconds(remaining_secs))
+                return {
+                    'success': msg,
+                    'html': ''
+                }
 
         try:
             correct_map = self.lcp.grade_answers(answers)
@@ -973,7 +1016,8 @@ class CapaMixin(CapaFields):
             self.set_last_submission_time()
 
         except (StudentInputError, ResponseError, LoncapaProblemError) as inst:
-            log.warning("StudentInputError in capa_module:problem_check", exc_info=True)
+            log.warning("StudentInputError in capa_module:problem_check",
+                        exc_info=True)
 
             # Save the user's state before failing
             self.set_state_from_lcp()
@@ -1018,10 +1062,18 @@ class CapaMixin(CapaFields):
         event_info['success'] = success
         event_info['attempts'] = self.attempts
         event_info['submission'] = self.get_submission_metadata_safe(answers_without_files, correct_map)
+        self.track_function_unmask('problem_check', event_info)
 
-        self.unmask_log(event_info)
-
-        self.runtime.track_function('problem_check', event_info)
+        if dog_stats_api:
+            dog_stats_api.increment(metric_name('checks'), tags=[u'result:success'])
+            dog_stats_api.histogram(
+                metric_name('correct_pct'),
+                float(published_grade['grade']) / published_grade['max_grade'],
+            )
+            dog_stats_api.histogram(
+                metric_name('attempts'),
+                self.attempts,
+            )
 
         if hasattr(self.runtime, 'psychometrics_handler'):  # update PsychometricsData using callback
             self.runtime.psychometrics_handler(self.get_state_for_lcp())
@@ -1029,59 +1081,89 @@ class CapaMixin(CapaFields):
         # render problem into HTML
         html = self.get_problem_html(encapsulate=False)
 
-        return {'success': success, 'contents': html}
+        return {
+            'success': success,
+            'contents': html
+        }
+    # pylint: enable=too-many-statements
 
-    def unmask_log(self, event_info):
+    def track_function_unmask(self, title, event_info):
         """
-        Translate the logging event_info to account for masking
-        and record the display_order.
-        This only changes names for responses that are masked, otherwise a NOP.
+        All calls to runtime.track_function route through here so that the
+        choice names can be unmasked.
+        """
+        # Do the unmask translates on a copy of event_info,
+        # avoiding problems where an event_info is unmasked twice.
+        event_unmasked = copy.deepcopy(event_info)
+        self.unmask_event(event_unmasked)
+        self.runtime.track_function(title, event_unmasked)
+
+    def unmask_event(self, event_info):
+        """
+        Translates in-place the event_info to account for masking
+        and adds information about permutation options in force.
         """
         # answers is like: {u'i4x-Stanford-CS99-problem-dada976e76f34c24bc8415039dee1300_2_1': u'mask_0'}
         # Each response values has an answer_id which matches the key in answers.
         for response in self.lcp.responders.values():
-            if hasattr(response, 'is_masked'):
-                # Just programming defensively, we don't assume much about the structure of event_info,
-                # but check for the existence of each thing to unmask
+            # Un-mask choice names in event_info for masked responses.
+            if response.has_mask():
+                # We don't assume much about the structure of event_info,
+                # but check for the existence of the things we need to un-mask.
 
-                # 1. answers/id
-                answer =  event_info.get('answers', {}).get(response.answer_id)
+                # Look for answers/id
+                answer = event_info.get('answers', {}).get(response.answer_id)
                 if answer is not None:
                     event_info['answers'][response.answer_id] = response.unmask_name(answer)
 
-                # 2. state/student_answers/id
+                # Look for state/student_answers/id
                 answer = event_info.get('state', {}).get('student_answers', {}).get(response.answer_id)
                 if answer is not None:
                     event_info['state']['student_answers'][response.answer_id] = response.unmask_name(answer)
 
-                # 3. Record the shuffled ordering
-                if not 'display_order' in event_info:
-                    event_info['display_order'] = {}
-                event_info['display_order'][response.answer_id] = response.unmask_order()
+                # Look for old_state/student_answers/id  -- parallel to the above case, happens on reset
+                answer = event_info.get('old_state', {}).get('student_answers', {}).get(response.answer_id)
+                if answer is not None:
+                    event_info['old_state']['student_answers'][response.answer_id] = response.unmask_name(answer)
+
+            # Add 'permutation' to event_info for permuted responses.
+            permutation_option = None
+            if response.has_shuffle():
+                permutation_option = 'shuffle'
+            elif response.has_answerpool():
+                permutation_option = 'answerpool'
+
+            if permutation_option is not None:
+                # Add permutation record tuple: (one of:'shuffle'/'answerpool', [as-displayed list])
+                if not 'permutation' in event_info:
+                    event_info['permutation'] = {}
+                event_info['permutation'][response.answer_id] = (permutation_option, response.unmask_order())
 
     def pretty_print_seconds(self, num_seconds):
         """
-        Returns time formatted nicely.
+        Returns time duration nicely formated, e.g. "3 minutes 4 seconds"
         """
-        if(num_seconds < 60):
-            plural = "s" if num_seconds > 1 else ""
-            return "%i second%s" % (num_seconds, plural)
-        elif(num_seconds < 60 * 60):
-            min_display = int(num_seconds / 60)
-            sec_display = num_seconds % 60
-            plural = "s" if min_display > 1 else ""
-            if sec_display == 0:
-                return "%i minute%s" % (min_display, plural)
-            else:
-                return "%i min, %i sec" % (min_display, sec_display)
-        else:
-            hr_display = int(num_seconds / 3600)
-            min_display = int((num_seconds % 3600) / 60)
-            sec_display = num_seconds % 60
-            if sec_display == 0:
-                return "%i hr, %i min" % (hr_display, min_display)
-            else:
-                return "%i hr, %i min, %i sec" % (hr_display, min_display, sec_display)
+        # Here _ is the N variant ungettext that does pluralization with a 3-arg call
+        _ = self.runtime.service(self, "i18n").ungettext
+        hours = num_seconds // 3600
+        sub_hour = num_seconds % 3600
+        minutes = sub_hour // 60
+        seconds = sub_hour % 60
+        display = ""
+        if hours > 0:
+            display += _("{num_hour} hour", "{num_hour} hours", hours).format(num_hour=hours)
+        if minutes > 0:
+            if display != "":
+                display += " "
+            # translators: "minute" refers to a minute of time
+            display += _("{num_minute} minute", "{num_minute} minutes", minutes).format(num_minute=minutes)
+        # Taking care to make "0 seconds" instead of "" for 0 time
+        if seconds > 0 or (hours == 0 and minutes == 0):
+            if display != "":
+                display += " "
+            # translators: "second" refers to a second of time
+            display += _("{num_second} second", "{num_second} seconds", seconds).format(num_second=seconds)
+        return display
 
     def get_submission_metadata_safe(self, answers, correct_map):
         """
@@ -1189,13 +1271,13 @@ class CapaMixin(CapaFields):
 
         if not self.lcp.supports_rescoring():
             event_info['failure'] = 'unsupported'
-            self.runtime.track_function('problem_rescore_fail', event_info)
+            self.track_function_unmask('problem_rescore_fail', event_info)
             # Translators: 'rescoring' refers to the act of re-submitting a student's solution so it can get a new score.
             raise NotImplementedError(_("Problem's definition does not support rescoring."))
 
         if not self.done:
             event_info['failure'] = 'unanswered'
-            self.runtime.track_function('problem_rescore_fail', event_info)
+            self.track_function_unmask('problem_rescore_fail', event_info)
             raise NotFoundError(_("Problem must be answered before it can be graded again."))
 
         # get old score, for comparison:
@@ -1209,12 +1291,12 @@ class CapaMixin(CapaFields):
         except (StudentInputError, ResponseError, LoncapaProblemError) as inst:
             log.warning("Input error in capa_module:problem_rescore", exc_info=True)
             event_info['failure'] = 'input_error'
-            self.runtime.track_function('problem_rescore_fail', event_info)
+            self.track_function_unmask('problem_rescore_fail', event_info)
             return {'success': u"Error: {0}".format(inst.message)}
 
         except Exception as err:
             event_info['failure'] = 'unexpected'
-            self.runtime.track_function('problem_rescore_fail', event_info)
+            self.track_function_unmask('problem_rescore_fail', event_info)
             if self.runtime.DEBUG:
                 msg = u"Error checking problem: {0}".format(err.message)
                 msg += u'\nTraceback:\n' + traceback.format_exc()
@@ -1242,7 +1324,7 @@ class CapaMixin(CapaFields):
         event_info['correct_map'] = correct_map.get_dict()
         event_info['success'] = success
         event_info['attempts'] = self.attempts
-        self.runtime.track_function('problem_rescore', event_info)
+        self.track_function_unmask('problem_rescore', event_info)
 
         # psychometrics should be called on rescoring requests in the same way as check-problem
         if hasattr(self.runtime, 'psychometrics_handler'):  # update PsychometricsData using callback
@@ -1267,7 +1349,7 @@ class CapaMixin(CapaFields):
         # Too late. Cannot submit
         if self.closed() and not self.max_attempts == 0:
             event_info['failure'] = 'closed'
-            self.runtime.track_function('save_problem_fail', event_info)
+            self.track_function_unmask('save_problem_fail', event_info)
             return {
                 'success': False,
                 # Translators: 'closed' means the problem's due date has passed. You may no longer attempt to solve the problem.
@@ -1278,7 +1360,7 @@ class CapaMixin(CapaFields):
         # again.
         if self.done and self.rerandomize == "always":
             event_info['failure'] = 'done'
-            self.runtime.track_function('save_problem_fail', event_info)
+            self.track_function_unmask('save_problem_fail', event_info)
             return {
                 'success': False,
                 'msg': _("Problem needs to be reset prior to save.")
@@ -1288,7 +1370,7 @@ class CapaMixin(CapaFields):
 
         self.set_state_from_lcp()
 
-        self.runtime.track_function('save_problem_success', event_info)
+        self.track_function_unmask('save_problem_success', event_info)
         msg = _("Your answers have been saved.")
         if not self.max_attempts == 0:
             msg = _("Your answers have been saved but not graded. Click 'Check' to grade them.")
@@ -1316,7 +1398,7 @@ class CapaMixin(CapaFields):
 
         if self.closed():
             event_info['failure'] = 'closed'
-            self.runtime.track_function('reset_problem_fail', event_info)
+            self.track_function_unmask('reset_problem_fail', event_info)
             return {
                 'success': False,
                 # Translators: 'closed' means the problem's due date has passed. You may no longer attempt to solve the problem.
@@ -1325,7 +1407,7 @@ class CapaMixin(CapaFields):
 
         if not self.done:
             event_info['failure'] = 'not_done'
-            self.runtime.track_function('reset_problem_fail', event_info)
+            self.track_function_unmask('reset_problem_fail', event_info)
             return {
                 'success': False,
                 'error': _("Refresh the page and make an attempt before resetting."),
@@ -1342,7 +1424,7 @@ class CapaMixin(CapaFields):
         self.set_state_from_lcp()
 
         event_info['new_state'] = self.lcp.get_state()
-        self.runtime.track_function('reset_problem', event_info)
+        self.track_function_unmask('reset_problem', event_info)
 
         return {
             'success': True,

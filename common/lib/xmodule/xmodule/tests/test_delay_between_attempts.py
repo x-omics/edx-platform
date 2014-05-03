@@ -23,267 +23,12 @@ from . import get_test_system
 from pytz import UTC
 
 
-class XModuleQuizAttemptsDelayTest(unittest.TestCase):
-    '''
-    Actual class to test delay between quiz attempts
-    '''
-
-    def test_first_submission(self):
-        # Not attempted yet
-        num_attempts = 0
-
-        # Many attempts remaining
-        module = CapaFactory.create(attempts=num_attempts, max_attempts=99, last_submission_time=None)
-
-        # Simulate problem is not completed yet
-        module.done = False
-
-        # Expect that we can submit
-        get_request_dict = {CapaFactory.input_key(): '3.14'}
-        result = module.check_problem(get_request_dict)
-
-        # Successfully submitted and answered
-        # Also, the number of attempts should increment by 1
-        self.assertEqual(result['success'], 'correct')
-        self.assertEqual(module.attempts, num_attempts + 1)
-
-    def test_no_wait_time(self):
-        # Already attempted once (just now) and thus has a submitted time
-        num_attempts = 1
-        last_submitted_time = datetime.datetime.now(UTC)
-
-        # Many attempts remaining
-        module = CapaFactory.create(attempts=num_attempts, max_attempts=99,
-                                    last_submission_time=last_submitted_time, submission_wait_seconds=0)
-
-        # Simulate problem is not completed yet
-        module.done = False
-
-        # Expect that we can submit
-        get_request_dict = {CapaFactory.input_key(): '3.14'}
-        result = module.check_problem(get_request_dict)
-
-        # Successfully submitted and answered
-        # Also, the number of attempts should increment by 1
-        self.assertEqual(result['success'], 'correct')
-        self.assertEqual(module.attempts, num_attempts + 1)
-
-    def test_submit_quiz_in_rapid_succession(self):
-        # Already attempted once (just now) and thus has a submitted time
-        num_attempts = 1
-        last_submitted_time = datetime.datetime.now(UTC)
-
-        # Many attempts remaining
-        module = CapaFactory.create(attempts=num_attempts, max_attempts=99,
-                                    last_submission_time=last_submitted_time, submission_wait_seconds=123)
-
-        # Simulate problem is not completed yet
-        module.done = False
-
-        # Check the problem
-        get_request_dict = {CapaFactory.input_key(): '3.14'}
-        result = module.check_problem(get_request_dict)
-
-        # You should get a dialog that tells you to wait
-        # Also, the number of attempts should not be incremented
-        self.assertRegexpMatches(result['success'], r"You must wait at least.*")
-        self.assertEqual(module.attempts, num_attempts)
-
-    def test_submit_quiz_too_soon(self):
-        # Already attempted once (just now)
-        num_attempts = 1
-
-        # Specify two times
-        last_submitted_time = datetime.datetime(2013, 12, 6, 0, 17, 36)
-        considered_now = datetime.datetime(2013, 12, 6, 0, 18, 36)
-
-        # Many attempts remaining
-        module = CapaFactory.create(attempts=num_attempts, max_attempts=99,
-                                    last_submission_time=last_submitted_time, submission_wait_seconds=180)
-
-        # Simulate problem is not completed yet
-        module.done = False
-
-        # Check the problem
-        get_request_dict = {CapaFactory.input_key(): '3.14'}
-        result = module.check_problem(get_request_dict, considered_now)
-
-        # You should get a dialog that tells you to wait 2 minutes
-        # Also, the number of attempts should not be incremented
-        self.assertRegexpMatches(result['success'], r"You must wait at least 3 minutes between submissions. 2 minutes remaining\..*")
-        self.assertEqual(module.attempts, num_attempts)
-
-    def test_submit_quiz_1_second_too_soon(self):
-        # Already attempted once (just now)
-        num_attempts = 1
-
-        # Specify two times
-        last_submitted_time = datetime.datetime(2013, 12, 6, 0, 17, 36)
-        considered_now = datetime.datetime(2013, 12, 6, 0, 20, 35)
-
-        # Many attempts remaining
-        module = CapaFactory.create(attempts=num_attempts, max_attempts=99,
-                                    last_submission_time=last_submitted_time, submission_wait_seconds=180)
-
-        # Simulate problem is not completed yet
-        module.done = False
-
-        # Check the problem
-        get_request_dict = {CapaFactory.input_key(): '3.14'}
-        result = module.check_problem(get_request_dict, considered_now)
-
-        # You should get a dialog that tells you to wait 2 minutes
-        # Also, the number of attempts should not be incremented
-        self.assertRegexpMatches(result['success'], r"You must wait at least 3 minutes between submissions. 1 second remaining\..*")
-        self.assertEqual(module.attempts, num_attempts)
-
-    def test_submit_quiz_as_soon_as_allowed(self):
-        # Already attempted once (just now)
-        num_attempts = 1
-
-        # Specify two times
-        last_submitted_time = datetime.datetime(2013, 12, 6, 0, 17, 36)
-        considered_now = datetime.datetime(2013, 12, 6, 0, 20, 36)
-
-        # Many attempts remaining
-        module = CapaFactory.create(attempts=num_attempts, max_attempts=99,
-                                    last_submission_time=last_submitted_time, submission_wait_seconds=180)
-
-        # Simulate problem is not completed yet
-        module.done = False
-
-        # Expect that we can submit
-        get_request_dict = {CapaFactory.input_key(): '3.14'}
-        result = module.check_problem(get_request_dict, considered_now)
-
-        # Successfully submitted and answered
-        # Also, the number of attempts should increment by 1
-        self.assertEqual(result['success'], 'correct')
-        self.assertEqual(module.attempts, num_attempts + 1)
-
-    def test_submit_quiz_after_delay_expired(self):
-        # Already attempted once (just now)
-        num_attempts = 1
-
-        # Specify two times
-        last_submitted_time = datetime.datetime(2013, 12, 6, 0, 17, 36)
-        considered_now = datetime.datetime(2013, 12, 6, 0, 24, 0)
-
-        # Many attempts remaining
-        module = CapaFactory.create(attempts=num_attempts, max_attempts=99,
-                                    last_submission_time=last_submitted_time, submission_wait_seconds=180)
-
-        # Simulate problem is not completed yet
-        module.done = False
-
-        # Expect that we can submit
-        get_request_dict = {CapaFactory.input_key(): '3.14'}
-        result = module.check_problem(get_request_dict, considered_now)
-
-        # Successfully submitted and answered
-        # Also, the number of attempts should increment by 1
-        self.assertEqual(result['success'], 'correct')
-        self.assertEqual(module.attempts, num_attempts + 1)
-
-    def test_still_cannot_submit_after_max_attempts(self):
-        # Already attempted once (just now) and thus has a submitted time
-        num_attempts = 99
-
-        # Specify two times
-        last_submitted_time = datetime.datetime(2013, 12, 6, 0, 17, 36)
-        considered_now = datetime.datetime(2013, 12, 6, 0, 24, 0)
-
-        # Many attempts remaining
-        module = CapaFactory.create(attempts=num_attempts, max_attempts=99,
-                                    last_submission_time=last_submitted_time, submission_wait_seconds=180)
-
-        # Simulate problem is not completed yet
-        module.done = False
-
-        # Expect that we cannot submit
-        with self.assertRaises(xmodule.exceptions.NotFoundError):
-            get_request_dict = {CapaFactory.input_key(): '3.14'}
-            module.check_problem(get_request_dict, considered_now)
-
-        # Expect that number of attempts NOT incremented
-        self.assertEqual(module.attempts, num_attempts)
-
-    def test_submit_quiz_with_long_delay(self):
-        # Already attempted once (just now)
-        num_attempts = 1
-
-        # Specify two times
-        last_submitted_time = datetime.datetime(2013, 12, 6, 0, 17, 36)
-        considered_now = datetime.datetime(2013, 12, 6, 2, 15, 35)
-
-        # Many attempts remaining
-        module = CapaFactory.create(attempts=num_attempts, max_attempts=99,
-                                    last_submission_time=last_submitted_time, submission_wait_seconds=60 * 60 * 2)
-
-        # Simulate problem is not completed yet
-        module.done = False
-
-        # Check the problem
-        get_request_dict = {CapaFactory.input_key(): '3.14'}
-        result = module.check_problem(get_request_dict, considered_now)
-
-        # You should get a dialog that tells you to wait 2 minutes
-        # Also, the number of attempts should not be incremented
-        self.assertRegexpMatches(result['success'], r"You must wait at least 2 hr, 0 min between submissions. 2 min, 1 sec remaining\..*")
-        self.assertEqual(module.attempts, num_attempts)
-
-    def test_submit_quiz_with_involved_pretty_print(self):
-        # Already attempted once (just now)
-        num_attempts = 1
-
-        # Specify two times
-        last_submitted_time = datetime.datetime(2013, 12, 6, 0, 17, 36)
-        considered_now = datetime.datetime(2013, 12, 6, 1, 15, 40)
-
-        # Many attempts remaining
-        module = CapaFactory.create(attempts=num_attempts, max_attempts=99,
-                                    last_submission_time=last_submitted_time, submission_wait_seconds=60 * 60 * 2 + 63)
-
-        # Simulate problem is not completed yet
-        module.done = False
-
-        # Check the problem
-        get_request_dict = {CapaFactory.input_key(): '3.14'}
-        result = module.check_problem(get_request_dict, considered_now)
-
-        # You should get a dialog that tells you to wait 2 minutes
-        # Also, the number of attempts should not be incremented
-        self.assertRegexpMatches(result['success'], r"You must wait at least 2 hr, 1 min, 3 sec between submissions. 1 hr, 2 min, 59 sec remaining\..*")
-        self.assertEqual(module.attempts, num_attempts)
-
-    def test_submit_quiz_with_nonplural_pretty_print(self):
-        # Already attempted once (just now)
-        num_attempts = 1
-
-        # Specify two times
-        last_submitted_time = datetime.datetime(2013, 12, 6, 0, 17, 36)
-        considered_now = last_submitted_time
-
-        # Many attempts remaining
-        module = CapaFactory.create(attempts=num_attempts, max_attempts=99,
-                                    last_submission_time=last_submitted_time, submission_wait_seconds=60)
-
-        # Simulate problem is not completed yet
-        module.done = False
-
-        # Check the problem
-        get_request_dict = {CapaFactory.input_key(): '3.14'}
-        result = module.check_problem(get_request_dict, considered_now)
-
-        # You should get a dialog that tells you to wait 2 minutes
-        # Also, the number of attempts should not be incremented
-        self.assertRegexpMatches(result['success'], r"You must wait at least 1 minute between submissions. 1 minute remaining\..*")
-        self.assertEqual(module.attempts, num_attempts)
-
-
-class CapaFactory(object):
+class CapaFactoryWithDelay(object):
     """
-    A helper class to create problem modules with various parameters for testing.
+    Create problem modules class, specialized for delay_between_attempts
+    test cases. This factory seems different enough from the one in
+    test_capa_module that unifying them is unattractive.
+    Removed the unused optional arguments.
     """
 
     sample_problem_xml = textwrap.dedent("""\
@@ -328,65 +73,29 @@ class CapaFactory(object):
         )
 
     @classmethod
-    def create(cls,
-               graceperiod=None,
-               due=None,
-               max_attempts=None,
-               showanswer=None,
-               rerandomize=None,
-               force_save_button=None,
-               attempts=None,
-               problem_state=None,
-               correct=False,
-               done=None,
-               text_customization=None,
-               last_submission_time=None,
-               submission_wait_seconds=None
-               ):
+    def create(
+        cls,
+        max_attempts=None,
+        attempts=None,
+        correct=False,
+        last_submission_time=None,
+        submission_wait_seconds=None
+    ):
         """
-        All parameters are optional, and are added to the created problem if specified.
-
-        Arguments:
-            graceperiod:
-            due:
-            max_attempts:
-            showanswer:
-            force_save_button:
-            rerandomize: all strings, as specified in the policy for the problem
-
-            problem_state: a dict to to be serialized into the instance_state of the
-                module.
-
-            attempts: also added to instance state.  Will be converted to an int.
+        Optional parameters here are cut down to what we actually use vs. the regular CapaFactory.
         """
         location = Location(["i4x", "edX", "capa_test", "problem",
                              "SampleProblem{0}".format(cls.next_num())])
         field_data = {'data': cls.sample_problem_xml}
 
-        if graceperiod is not None:
-            field_data['graceperiod'] = graceperiod
-        if due is not None:
-            field_data['due'] = due
         if max_attempts is not None:
             field_data['max_attempts'] = max_attempts
-        if showanswer is not None:
-            field_data['showanswer'] = showanswer
-        if force_save_button is not None:
-            field_data['force_save_button'] = force_save_button
-        if rerandomize is not None:
-            field_data['rerandomize'] = rerandomize
-        if done is not None:
-            field_data['done'] = done
-        if text_customization is not None:
-            field_data['text_customization'] = text_customization
         if last_submission_time is not None:
             field_data['last_submission_time'] = last_submission_time
         if submission_wait_seconds is not None:
             field_data['submission_wait_seconds'] = submission_wait_seconds
 
         descriptor = Mock(weight="1")
-        if problem_state is not None:
-            field_data.update(problem_state)
         if attempts is not None:
             # converting to int here because I keep putting "0" and "1" in the tests
             # since everything else is a string.
@@ -402,9 +111,196 @@ class CapaFactory(object):
         )
 
         if correct:
-            # TODO: probably better to actually set the internal state properly, but...
+            # Could set the internal state formally, but here we just jam in the score.
             module.get_score = lambda: {'score': 1, 'total': 1}
         else:
             module.get_score = lambda: {'score': 0, 'total': 1}
 
         return module
+
+
+class XModuleQuizAttemptsDelayTest(unittest.TestCase):
+    """
+    Class to test delay between quiz attempts.
+    """
+
+    def create_and_check(self,
+                         num_attempts=None,
+                         last_submission_time=None,
+                         submission_wait_seconds=None,
+                         considered_now=None,
+                         skip_check_problem=False):
+        """Unified create and check code for the tests here."""
+        module = CapaFactoryWithDelay.create(
+            attempts=num_attempts,
+            max_attempts=99,
+            last_submission_time=last_submission_time,
+            submission_wait_seconds=submission_wait_seconds
+        )
+        module.done = False
+        get_request_dict = {CapaFactoryWithDelay.input_key(): "3.14"}
+        if skip_check_problem:
+            return (module, None)
+        if considered_now is not None:
+            result = module.check_problem(get_request_dict, considered_now)
+        else:
+            result = module.check_problem(get_request_dict)
+        return (module, result)
+
+    def test_first_submission(self):
+        # Not attempted yet
+        num_attempts = 0
+        (module, result) = self.create_and_check(
+            num_attempts=num_attempts,
+            last_submission_time=None
+        )
+        # Successfully submitted and answered
+        # Also, the number of attempts should increment by 1
+        self.assertEqual(result['success'], 'correct')
+        self.assertEqual(module.attempts, num_attempts + 1)
+
+    def test_no_wait_time(self):
+        num_attempts = 1
+        (module, result) = self.create_and_check(
+            num_attempts=num_attempts,
+            last_submission_time=datetime.datetime.now(UTC),
+            submission_wait_seconds=0
+        )
+        # Successfully submitted and answered
+        # Also, the number of attempts should increment by 1
+        self.assertEqual(result['success'], 'correct')
+        self.assertEqual(module.attempts, num_attempts + 1)
+
+    def test_submit_quiz_in_rapid_succession(self):
+        # Already attempted once (just now) and thus has a submitted time
+        num_attempts = 1
+        (module, result) = self.create_and_check(
+            num_attempts=num_attempts,
+            last_submission_time=datetime.datetime.now(UTC),
+            submission_wait_seconds=123
+        )
+        # You should get a dialog that tells you to wait
+        # Also, the number of attempts should not be incremented
+        self.assertRegexpMatches(result['success'], r"You must wait at least.*")
+        self.assertEqual(module.attempts, num_attempts)
+
+    def test_submit_quiz_too_soon(self):
+        # Already attempted once (just now)
+        num_attempts = 1
+        (module, result) = self.create_and_check(
+            num_attempts=num_attempts,
+            last_submission_time=datetime.datetime(2013, 12, 6, 0, 17, 36),
+            submission_wait_seconds=180,
+            considered_now=datetime.datetime(2013, 12, 6, 0, 18, 36)
+        )
+        # You should get a dialog that tells you to wait 2 minutes
+        # Also, the number of attempts should not be incremented
+        self.assertRegexpMatches(result['success'], r"You must wait at least 3 minutes between submissions. 2 minutes remaining\..*")
+        self.assertEqual(module.attempts, num_attempts)
+
+    def test_submit_quiz_1_second_too_soon(self):
+        # Already attempted once (just now)
+        num_attempts = 1
+        (module, result) = self.create_and_check(
+            num_attempts=num_attempts,
+            last_submission_time=datetime.datetime(2013, 12, 6, 0, 17, 36),
+            submission_wait_seconds=180,
+            considered_now=datetime.datetime(2013, 12, 6, 0, 20, 35)
+        )
+        # You should get a dialog that tells you to wait 2 minutes
+        # Also, the number of attempts should not be incremented
+        self.assertRegexpMatches(result['success'], r"You must wait at least 3 minutes between submissions. 1 second remaining\..*")
+        self.assertEqual(module.attempts, num_attempts)
+
+    def test_submit_quiz_as_soon_as_allowed(self):
+        # Already attempted once (just now)
+        num_attempts = 1
+        (module, result) = self.create_and_check(
+            num_attempts=num_attempts,
+            last_submission_time=datetime.datetime(2013, 12, 6, 0, 17, 36),
+            submission_wait_seconds=180,
+            considered_now=datetime.datetime(2013, 12, 6, 0, 20, 36)
+        )
+        # Successfully submitted and answered
+        # Also, the number of attempts should increment by 1
+        self.assertEqual(result['success'], 'correct')
+        self.assertEqual(module.attempts, num_attempts + 1)
+
+    def test_submit_quiz_after_delay_expired(self):
+        # Already attempted once (just now)
+        num_attempts = 1
+        (module, result) = self.create_and_check(
+            num_attempts=num_attempts,
+            last_submission_time=datetime.datetime(2013, 12, 6, 0, 17, 36),
+            submission_wait_seconds=180,
+            considered_now=datetime.datetime(2013, 12, 6, 0, 24, 0)
+        )
+        # Successfully submitted and answered
+        # Also, the number of attempts should increment by 1
+        self.assertEqual(result['success'], 'correct')
+        self.assertEqual(module.attempts, num_attempts + 1)
+
+    def test_still_cannot_submit_after_max_attempts(self):
+        # Already attempted once (just now) and thus has a submitted time
+        num_attempts = 99
+        # Regular create_and_check should fail
+        with self.assertRaises(xmodule.exceptions.NotFoundError):
+            (module, unused_result) = self.create_and_check(
+                num_attempts=num_attempts,
+                last_submission_time=datetime.datetime(2013, 12, 6, 0, 17, 36),
+                submission_wait_seconds=180,
+                considered_now=datetime.datetime(2013, 12, 6, 0, 24, 0)
+            )
+
+        # Now try it without the check_problem
+        (module, unused_result) = self.create_and_check(
+            num_attempts=num_attempts,
+            last_submission_time=datetime.datetime(2013, 12, 6, 0, 17, 36),
+            submission_wait_seconds=180,
+            considered_now=datetime.datetime(2013, 12, 6, 0, 24, 0),
+            skip_check_problem=True
+        )
+        # Expect that number of attempts NOT incremented
+        self.assertEqual(module.attempts, num_attempts)
+
+    def test_submit_quiz_with_long_delay(self):
+        # Already attempted once (just now)
+        num_attempts = 1
+        (module, result) = self.create_and_check(
+            num_attempts=num_attempts,
+            last_submission_time=datetime.datetime(2013, 12, 6, 0, 17, 36),
+            submission_wait_seconds=60 * 60 * 2,
+            considered_now=datetime.datetime(2013, 12, 6, 2, 15, 35)
+        )
+        # You should get a dialog that tells you to wait 2 minutes
+        # Also, the number of attempts should not be incremented
+        self.assertRegexpMatches(result['success'], r"You must wait at least 2 hours between submissions. 2 minutes 1 second remaining\..*")
+        self.assertEqual(module.attempts, num_attempts)
+
+    def test_submit_quiz_with_involved_pretty_print(self):
+        # Already attempted once (just now)
+        num_attempts = 1
+        (module, result) = self.create_and_check(
+            num_attempts=num_attempts,
+            last_submission_time=datetime.datetime(2013, 12, 6, 0, 17, 36),
+            submission_wait_seconds=60 * 60 * 2 + 63,
+            considered_now=datetime.datetime(2013, 12, 6, 1, 15, 40)
+        )
+        # You should get a dialog that tells you to wait 2 minutes
+        # Also, the number of attempts should not be incremented
+        self.assertRegexpMatches(result['success'], r"You must wait at least 2 hours 1 minute 3 seconds between submissions. 1 hour 2 minutes 59 seconds remaining\..*")
+        self.assertEqual(module.attempts, num_attempts)
+
+    def test_submit_quiz_with_nonplural_pretty_print(self):
+        # Already attempted once (just now)
+        num_attempts = 1
+        (module, result) = self.create_and_check(
+            num_attempts=num_attempts,
+            last_submission_time=datetime.datetime(2013, 12, 6, 0, 17, 36),
+            submission_wait_seconds=60,
+            considered_now=datetime.datetime(2013, 12, 6, 0, 17, 36)
+        )
+        # You should get a dialog that tells you to wait 2 minutes
+        # Also, the number of attempts should not be incremented
+        self.assertRegexpMatches(result['success'], r"You must wait at least 1 minute between submissions. 1 minute remaining\..*")
+        self.assertEqual(module.attempts, num_attempts)

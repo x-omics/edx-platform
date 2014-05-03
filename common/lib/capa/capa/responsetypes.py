@@ -33,6 +33,8 @@ from sys import float_info
 from collections import namedtuple
 from shapely.geometry import Point, MultiPoint
 
+from dogapi import dog_stats_api
+
 # specific library imports
 from calc import evaluator, UndefinedVariable
 from . import correctmap
@@ -412,6 +414,19 @@ class LoncapaResponse(object):
 
         return response_msg_div
 
+    # These accessor functions allow polymorphic checking of response
+    # objects without having to call hasattr() directly.
+    def has_mask(self):
+        """True if the response has masking."""
+        return hasattr(self, '_has_mask')
+
+    def has_shuffle(self):
+        """True if the response has a shuffle transformation."""
+        return hasattr(self, '_has_shuffle')
+
+    def has_answerpool(self):
+        """True if the response has an answer-pool transformation."""
+        return hasattr(self, '_has_answerpool')
 
 #-----------------------------------------------------------------------------
 
@@ -716,6 +731,22 @@ class ChoiceResponse(LoncapaResponse):
 
 @registry.register
 class MultipleChoiceResponse(LoncapaResponse):
+    """
+    Multiple Choice Response
+    The shuffle and answer-pool features on this class enable permuting and
+    subsetting the choices shown to the student.
+    Both features enable name "masking":
+    With masking, the regular names of multiplechoice choices
+    choice_0 choice_1 ... are not used. Instead we use random masked names
+    mask_2 mask_0 ... so that a view-source of the names reveals nothing about
+    the original order. We introduce the masked names right at init time, so the
+    whole software stack works with just the one system of naming.
+    The .has_mask() test on a response checks for masking, implemented by a
+    ._has_mask attribute on the response object.
+    The logging functionality in capa_base calls the unmask functions here
+    to translate back to choice_0 name style for recording in the logs, so
+    the logging is in terms of the regular names.
+    """
     # TODO: handle direction and randomize
 
     tags = ['multiplechoiceresponse']
@@ -749,10 +780,16 @@ class MultipleChoiceResponse(LoncapaResponse):
         for response in self.xml.xpath("choicegroup"):
             # Is Masking enabled? -- check for shuffle or answer-pool features
             ans_str = response.get("answer-pool")
-            if False: # Temporarily turn off masking
-                self.is_masked = True
-                self.mask_dict = {}
-                rng = random.Random(self.context["seed"])
+            if response.get("shuffle") == "true" or (ans_str is not None and ans_str != "0"):
+                self._has_mask = True  # pylint: disable=W0201
+                self._mask_dict = {}   # pylint: disable=W0201
+                # We do not want the random mask names to be the same
+                # for all responses in a problem (sharing the one seed),
+                # like mask_2 in view-source turns out to always be the correct choice.
+                # But it must be repeatable and a function of the seed.
+                # Therefore we add the _1 number from the .id to the seed.
+                seed_delta = int(self.id[self.id.rindex("_") + 1:])
+                rng = random.Random(self.context["seed"] + seed_delta)
                 # e.g. mask_ids = [3, 1, 0, 2]
                 mask_ids = range(len(response))
                 rng.shuffle(mask_ids)
@@ -769,9 +806,9 @@ class MultipleChoiceResponse(LoncapaResponse):
                     i += 1
                 # If using the masked name, e.g. mask_0, save the regular name
                 # to support unmasking later (for the logs).
-                if hasattr(self, "is_masked"):
+                if self.has_mask():
                     mask_name = "mask_" + str(mask_ids.pop())
-                    self.mask_dict[mask_name] = name
+                    self._mask_dict[mask_name] = name
                     choice.set("name", mask_name)
                 else:
                     choice.set("name", name)
@@ -782,7 +819,7 @@ class MultipleChoiceResponse(LoncapaResponse):
         Cannot do these at response init time, as not enough
         other stuff exists at that time.
         """
-        self.do_shuffle(self.xml)
+        self.do_shuffle(self.xml, problem)
         self.do_answer_pool(self.xml, problem)
 
     def get_score(self, student_answers):
@@ -800,65 +837,63 @@ class MultipleChoiceResponse(LoncapaResponse):
     def get_answers(self):
         return {self.answer_id: self.correct_choices}
 
-    # Choice name Masking
-    # A feature where the regular names of multiplechoice choices
-    # choice_0 choice_1 ... are not used. Instead we use random masked names
-    # mask_2 mask_0 ... so that a view-source of the names reveals nothing about
-    # the original order. We introduce the masked names right at init time, so the
-    # whole software stack works with just the one system of naming.
-    # A response with masking has its .is_masked attribute set.
-    # We "unmask" the names, back to choice_0 style, only for the logs so they correspond
-    # to how the problems look to the author.
-    #
-    # Masking is enabled for the shuffle and answer-pool features.
-
     def unmask_name(self, name):
         """
         Given a masked name, e.g. mask_2, returns the regular name, e.g. choice_0.
-        Fails loudly if called for a response that is not masking.
+        Fails with LoncapaProblemError if called on a response that is not masking.
         """
-        # We could check that masking is enabled, but I figure it's better to
-        # fail loudly so the upper layers are alerted to mis-use.
-        return self.mask_dict[name]
+        if not self.has_mask():
+            _ = self.capa_system.i18n.ugettext
+            # Translators: 'unmask_name' is a method name and should not be translated.
+            msg = _("unmask_name called on response that is not masked")
+            raise LoncapaProblemError(msg)
+        return self._mask_dict[name]
 
     def unmask_order(self):
         """
         Returns a list of the choice names in the order displayed to the user,
         using the regular (non-masked) names.
-        Fails loudly if called on a response that is not masking.
+        Fails with LoncapaProblemError if called on a response that is not masking.
         """
         choices = self.xml.xpath('choicegroup/choice')
+        # We let the unmask_name() raise the error for us if this response is not masking.
         return [self.unmask_name(choice.get("name")) for choice in choices]
 
-    def do_shuffle(self, tree):
+    def do_shuffle(self, tree, problem):
         """
         For a choicegroup with shuffle="true", shuffles the choices in-place in the given tree
         based on the seed. Otherwise does nothing.
+        Raises LoncapaProblemError if both shuffle and answer-pool are active:
+        a problem should use one or the other but not both.
         Does nothing if the tree has already been processed.
         """
         # The tree is already pared down to this <multichoiceresponse> so this query just
         # gets the child choicegroup (i.e. no leading //)
         choicegroups = tree.xpath('choicegroup[@shuffle="true"]')
         if choicegroups:
-            if len(choicegroups) > 1:
-                raise LoncapaProblemError('We support one shuffled choicegroup per response')
             choicegroup = choicegroups[0]
-            # Note that this tree has been processed.
-            if choicegroup.get('shuffle-done') is not None:
+            if choicegroup.get('answer-pool') is not None:
+                _ = self.capa_system.i18n.ugettext
+                # Translators: 'shuffle' and 'answer-pool' are attribute names and should not be translated.
+                msg = _("Do not use shuffle and answer-pool at the same time")
+                raise LoncapaProblemError(msg)
+            # Note in the response that shuffling is done.
+            # Both to avoid double-processing, and to feed the logs.
+            if self.has_shuffle():
                 return
-            choicegroup.set('shuffle-done', 'done')
+            self._has_shuffle = True  # pylint: disable=W0201
             # Move elements from tree to list for shuffling, then put them back.
             ordering = list(choicegroup.getchildren())
             for choice in ordering:
                 choicegroup.remove(choice)
-            ordering = self.shuffle_choices(ordering)
+            ordering = self.shuffle_choices(ordering, self.get_rng(problem))
             for choice in ordering:
                 choicegroup.append(choice)
 
-    def shuffle_choices(self, choices):
+    def shuffle_choices(self, choices, rng):
         """
-        Returns a list of choice nodes with the shuffling done.
-        Uses the context seed for the randomness of the shuffle.
+        Returns a list of choice nodes with the shuffling done,
+        using the provided random number generator.
         Choices with 'fixed'='true' are held back from the shuffle.
         """
         # Separate out a list of the stuff to be shuffled
@@ -879,23 +914,25 @@ class MultipleChoiceResponse(LoncapaResponse):
                 tail.append(choice)
             else:
                 middle.append(choice)
-        rng = random.Random(self.context['seed'])  # make one vs. messing with the global one
         rng.shuffle(middle)
         return head + middle + tail
 
     def get_rng(self, problem):
         """
         Get the random number generator to be shared by responses
-        off the problem, creating it on the problem if needed.
+        of the problem, creating it on the problem if needed.
         """
-        # Multiple answer-pool questions share one rng stored on the problem.
-        # If each question got its own rng, the structure
-        # could appear predictable to the student, e.g. (c) keeps being the
-        # correct choice.
-        # TODO: could make the sharing some sort of authoring option
-        if not hasattr(problem, 'shared_rng'):
-            problem.shared_rng = random.Random(self.context['seed'])
-        return problem.shared_rng
+        # Multiple questions in a problem share one random number generator (rng) object
+        # stored on the problem. If each question got its own rng, the structure of multiple
+        # questions within a problem could appear predictable to the student,
+        # e.g. (c) keeps being the correct choice. This is due to the seed being
+        # defined at the problem level, so the multiple rng's would be seeded the same.
+        # The name _shared_rng begins with an _ to suggest that it is not a facility
+        # for general use.
+        # pylint: disable=protected-access
+        if not hasattr(problem, '_shared_rng'):
+            problem._shared_rng = random.Random(self.context['seed'])
+        return problem._shared_rng
 
     def do_answer_pool(self, tree, problem):
         """
@@ -907,22 +944,28 @@ class MultipleChoiceResponse(LoncapaResponse):
         The <choicegroup> tag must have an attribute 'answer-pool' giving the desired
         pool size. If that attribute is zero or not present, no operation is performed.
         Calling this a second time does nothing.
+        Raises LoncapaProblemError if the answer-pool value is not an integer,
+        or if the number of correct or incorrect choices available is zero.
         """
         choicegroups = tree.xpath("choicegroup[@answer-pool]")
-        rng = self.get_rng(problem)
-
-        for choicegroup in choicegroups:
+        if choicegroups:
+            choicegroup = choicegroups[0]
             num_str = choicegroup.get('answer-pool')
             if num_str == '0':
-                break
-            # Note that this tree has been processed
-            if choicegroup.get('answer-pool-done') is not None:
-                break
-            choicegroup.set('answer-pool-done', 'done')
+                return
             try:
                 num_choices = int(num_str)
             except ValueError:
-                raise LoncapaProblemError("answer-pool value should be an integer")
+                _ = self.capa_system.i18n.ugettext
+                # Translators: 'answer-pool' is an attribute name and should not be translated.
+                msg = _("answer-pool value should be an integer")
+                raise LoncapaProblemError(msg)
+
+            # Note in the response that answerpool is done.
+            # Both to avoid double-processing, and to feed the logs.
+            if self.has_answerpool():
+                return
+            self._has_answerpool = True  # pylint: disable=W0201
 
             choices_list = list(choicegroup.getchildren())
 
@@ -930,6 +973,7 @@ class MultipleChoiceResponse(LoncapaResponse):
             for choice in choices_list:
                 choicegroup.remove(choice)
 
+            rng = self.get_rng(problem)  # random number generator to use
             # Sample from the answer pool to get the subset choices and solution id
             (solution_id, subset_choices) = self.sample_from_answer_pool(choices_list, rng, num_choices)
 
@@ -957,6 +1001,8 @@ class MultipleChoiceResponse(LoncapaResponse):
         Returns a tuple with 2 items:
             1. the solution_id corresponding with the chosen correct answer
             2. (subset) list of choice nodes with num-1 incorrect and 1 correct
+
+        Raises an error if the number of correct or incorrect choices is 0.
         """
 
         correct_choices = []
@@ -967,13 +1013,20 @@ class MultipleChoiceResponse(LoncapaResponse):
                 correct_choices.append(choice)
             else:
                 incorrect_choices.append(choice)
-                # TODO: check if we should require correct == "false"
+                # In my small test, capa seems to treat the absence of any correct=
+                # attribute as equivalent to ="false", so that's what we do here.
 
-        # We throw an error if the problem is highly ill-formed.
+        # We raise an error if the problem is highly ill-formed.
         # There must be at least one correct and one incorrect choice.
-        # TODO: perhaps this makes more sense for *all* problems, not just down in this corner.
+        # IDEA: perhaps this sort semantic-lint constraint should be generalized to all multichoice
+        # not just down in this corner when answer-pool is used.
+        # Or perhaps in the overall author workflow, these errors are unhelpful and
+        # should all be removed.
         if len(correct_choices) < 1 or len(incorrect_choices) < 1:
-            raise responsetypes.LoncapaProblemError("Choicegroup must include at last 1 correct and 1 incorrect choice")
+            _ = self.capa_system.i18n.ugettext
+            # Translators: 'Choicegroup' is an input type and should not be translated.
+            msg = _("Choicegroup must include at least 1 correct and 1 incorrect choice")
+            raise LoncapaProblemError(msg)
 
         # Limit the number of incorrect choices to what we actually have
         num_incorrect = num_pool - 1
@@ -991,10 +1044,6 @@ class MultipleChoiceResponse(LoncapaResponse):
         rng.shuffle(subset_choices)
 
         return (solution_id, subset_choices)
-
-
-
-
 
 
 @registry.register
@@ -1916,6 +1965,13 @@ class CodeResponse(LoncapaResponse):
         (valid_score_msg, correct, points, msg) = self._parse_score_msg(score_msg)
 
         _ = self.capa_system.i18n.ugettext
+
+        dog_stats_api.increment(xqueue_interface.XQUEUE_METRIC_NAME, tags=[
+            'action:update_score',
+            'correct:{}'.format(correct)
+        ])
+
+        dog_stats_api.histogram(xqueue_interface.XQUEUE_METRIC_NAME + '.update_score.points_earned', points)
 
         if not valid_score_msg:
             # Translators: 'grader' refers to the edX automatic code grader.

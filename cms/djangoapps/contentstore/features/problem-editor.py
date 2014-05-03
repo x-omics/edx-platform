@@ -250,6 +250,13 @@ def i_can_edit_problem(_step):
     world.edit_component()
 
 
+@step(u'I can see cheatsheet$')
+def verify_cheat_sheet_displaying(_step):
+    world.css_click("a.cheatsheet-toggle")
+    css_selector = 'article.simple-editor-cheatsheet'
+    world.wait_for_visible(css_selector)
+
+
 def verify_high_level_source_links(step, visible):
     if visible:
         assert_true(world.is_css_present('.launch-latex-compiler'),
@@ -287,5 +294,5 @@ def set_weight(weight):
 
 
 def open_high_level_source():
-    world.css_click('a.edit-button')
+    world.edit_component()
     world.css_click('.launch-latex-compiler > a')
