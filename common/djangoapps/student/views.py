@@ -37,6 +37,7 @@ from edxmako.shortcuts import render_to_response, render_to_string
 from mako.exceptions import TopLevelLookupException
 
 from course_modes.models import CourseMode
+
 from student.models import (
     Registration, UserProfile, PendingNameChange,
     PendingEmailChange, CourseEnrollment, unique_id_for_user,
@@ -59,6 +60,7 @@ from collections import namedtuple
 
 from courseware.courses import get_courses, sort_by_announcement
 from courseware.access import has_access
+from courseware.models import course_modified_times
 
 from django_comment_common.models import Role
 
@@ -240,6 +242,8 @@ def get_course_enrollment_pairs(user, course_org_filter, org_filter_out_set):
     Get the relevant set of (Course, CourseEnrollment) pairs to be displayed on
     a student's dashboard.
     """
+    pairs = []
+
     for enrollment in CourseEnrollment.enrollments_for_user(user):
         course = course_from_id(enrollment.course_id)
         if course:
@@ -253,11 +257,17 @@ def get_course_enrollment_pairs(user, course_org_filter, org_filter_out_set):
             elif course.location.org in org_filter_out_set:
                 continue
 
-            yield (course, enrollment)
+            pairs.append((course, enrollment))
         else:
             log.error("User {0} enrolled in non-existent course {1}"
                       .format(user.username, enrollment.course_id))
 
+    ## Sort pairs in order of courseware access. If I am actively using a course, it should bubble up to the top.
+    modified_times_map = course_modified_times(user, [p[0].scope_ids.usage_id for p in pairs])
+    def key_function(x):
+        return modified_times_map.get(unicode(x[0].scope_ids.usage_id), datetime.min)
+    pairs.sort(key=key_function, reverse=True)
+    return pairs
 
 def _cert_info(user, course, cert_status):
     """
