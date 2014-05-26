@@ -31,7 +31,7 @@ from xmodule.editing_module import TabsEditingDescriptor
 from xmodule.raw_module import EmptyDataRawDescriptor
 from xmodule.xml_module import is_pointer_tag, name_to_pathname, deserialize_field
 
-from .video_utils import create_youtube_string
+from .video_utils import create_youtube_string, get_video_from_cdn
 from .video_xfields import VideoFields
 from .video_handlers import VideoStudentViewHandlers, VideoStudioViewHandlers
 
@@ -88,11 +88,20 @@ class VideoModule(VideoFields, VideoStudentViewHandlers, XModule):
     ]}
     js_module_name = "Video"
 
+
     def get_html(self):
         track_url = None
         download_video_link = None
         transcript_download_format = self.transcript_download_format
         sources = filter(None, self.html5_sources)
+
+        # If the user comes from China use China CDN for html5 videos.
+        # 'CN' is China ISO 3166-1 country code.
+        if getattr(self, 'video_speed_optimizations', True) and self.system.user_location == 'CN':
+            for index, source_url in enumerate(sources):
+                new_url = get_video_from_cdn(settings.VIDEO_CDN_URL, source_url)
+                if new_url:
+                    sources[index] = new_url
 
         if self.download_video:
             if self.source:

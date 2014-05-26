@@ -22,6 +22,7 @@ class CourseMetadata(object):
                      'show_timezone',
                      'format',
                      'graded',
+                     'video_speed_optimizations', # Do not show this field in Advanced Settings.
     ]
 
     @classmethod
