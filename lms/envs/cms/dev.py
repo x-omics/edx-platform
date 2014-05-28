@@ -22,32 +22,15 @@ FEATURES['ENABLE_LMS_MIGRATION'] = False
 
 META_UNIVERSITIES = {}
 
-modulestore_options = {
+MODULESTORE_OPTIONS = {
     'default_class': 'xmodule.hidden_module.HiddenDescriptor',
     'fs_root': DATA_DIR,
     'render_template': 'edxmako.shortcuts.render_to_string',
 }
 
-MODULESTORE = {
-    'default': {
-        'ENGINE': 'xmodule.modulestore.mixed.MixedModuleStore',
-        'OPTIONS': {
-            'mappings': {},
-            'stores': {
-                'default': {
-                    'ENGINE': 'xmodule.modulestore.mongo.MongoModuleStore',
-                    'DOC_STORE_CONFIG': DOC_STORE_CONFIG,
-                    'OPTIONS': modulestore_options,
-                },
-                'draft': {
-                    'ENGINE': 'xmodule.modulestore.mongo.DraftMongoModuleStore',
-                    'DOC_STORE_CONFIG': DOC_STORE_CONFIG,
-                    'OPTIONS': modulestore_options,
-                },
-            },
-        }
-    }
-}
+for store in MODULESTORE['default']['OPTIONS']['stores'].itervalues():
+    store['DOC_STORE_CONFIG'] = DOC_STORE_CONFIG
+    store['OPTIONS'] = MODULESTORE_OPTIONS
 
 CONTENTSTORE = {
     'ENGINE': 'xmodule.contentstore.mongo.MongoContentStore',

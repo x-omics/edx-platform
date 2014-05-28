@@ -2,7 +2,6 @@
 Modulestore configuration for test cases.
 """
 
-from uuid import uuid4
 from django.test import TestCase
 from xmodule.modulestore.django import (
     editable_modulestore, clear_existing_modulestores, loc_mapper)
@@ -112,47 +111,6 @@ def xml_store_config(data_dir):
     }
 
     store['direct'] = store['default']
-    return store
-
-
-def studio_store_config(data_dir):
-    """
-    Defines modulestore structure used by Studio tests.
-    """
-    store_config = {
-        'host': 'localhost',
-        'db': 'test_xmodule',
-        'collection': 'modulestore{0}'.format(uuid4().hex[:5]),
-    }
-    options = {
-        'default_class': 'xmodule.raw_module.RawDescriptor',
-        'fs_root': data_dir,
-        'render_template': 'edxmako.shortcuts.render_to_string',
-    }
-
-    store = {
-        'default': {
-            'ENGINE': 'xmodule.modulestore.draft.DraftModuleStore',
-            'DOC_STORE_CONFIG': store_config,
-            'OPTIONS': options
-        },
-        'direct': {
-            'ENGINE': 'xmodule.modulestore.mongo.MongoModuleStore',
-            'DOC_STORE_CONFIG': store_config,
-            'OPTIONS': options
-        },
-        'draft': {
-            'ENGINE': 'xmodule.modulestore.draft.DraftModuleStore',
-            'DOC_STORE_CONFIG': store_config,
-            'OPTIONS': options
-        },
-        'split': {
-            'ENGINE': 'xmodule.modulestore.split_mongo.SplitMongoModuleStore',
-            'DOC_STORE_CONFIG': store_config,
-            'OPTIONS': options
-        }
-    }
-
     return store
 
 

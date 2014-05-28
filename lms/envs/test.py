@@ -108,17 +108,12 @@ STATICFILES_DIRS += [
     if os.path.isdir(COMMON_TEST_DATA_ROOT / course_dir)
 ]
 
-# point tests at the test courses by default
-
-MODULESTORE = {
-    'default': {
-        'ENGINE': 'xmodule.modulestore.xml.XMLModuleStore',
-        'OPTIONS': {
-            'data_dir': COMMON_TEST_DATA_ROOT,
-            'default_class': 'xmodule.hidden_module.HiddenDescriptor',
-        }
+update_module_store_settings(
+    MODULESTORE,
+    xml_store_options={
+        'data_dir': COMMON_TEST_DATA_ROOT,
     }
-}
+)
 
 CONTENTSTORE = {
     'ENGINE': 'xmodule.contentstore.mongo.MongoContentStore',

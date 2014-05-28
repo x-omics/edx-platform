@@ -99,7 +99,7 @@ def get_default_store_name_for_current_request():
 
 def modulestore(name=None):
     """
-    This returns an instance of a modulestore of given name. This will wither return an existing
+    This returns an instance of a modulestore of given name. This will either return an existing
     modulestore or create a new one
     """
 

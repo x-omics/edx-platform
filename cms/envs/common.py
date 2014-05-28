@@ -28,9 +28,10 @@ import imp
 import sys
 import lms.envs.common
 from lms.envs.common import (
-    USE_TZ, TECH_SUPPORT_EMAIL, PLATFORM_NAME, BUGS_EMAIL, DOC_STORE_CONFIG, ALL_LANGUAGES, WIKI_ENABLED
+    USE_TZ, TECH_SUPPORT_EMAIL, PLATFORM_NAME, BUGS_EMAIL, DOC_STORE_CONFIG, ALL_LANGUAGES, WIKI_ENABLED, MODULESTORE
 )
 from path import path
+from lms.envs.modulestore_settings import *
 
 from lms.lib.xblock.mixin import LmsBlockMixin
 from cms.lib.xblock.mixin import CmsBlockMixin
