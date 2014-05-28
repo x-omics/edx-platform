@@ -178,7 +178,7 @@ class MixedModuleStore(ModuleStoreWriteBase):
 
         Args:
         * course_id (CourseKey)
-        * ignore_case (bool): Tf True, do a case insensitive search. If
+        * ignore_case (bool): If True, do a case insensitive search. If
             False, do a case sensitive search
         """
         assert(isinstance(course_id, CourseKey))
