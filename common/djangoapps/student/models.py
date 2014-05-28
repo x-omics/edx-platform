@@ -946,6 +946,10 @@ class CourseEnrollment(models.Model):
         For paid/verified certificates, students may receive a refund IFF they have
         a verified certificate and the deadline for refunds has not yet passed.
         """
+        # hack to support manual refunds
+        # (a signal will call this method and needs to return true for manual refunds)
+        if getattr(self, 'can_refund', None) is not None:
+            return True
         course_mode = CourseMode.mode_for_course(self.course_id, 'verified')
         if course_mode is None:
             return False
