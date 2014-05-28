@@ -1306,7 +1306,7 @@ class TestItemCrud(SplitModuleTest):
         # delete a leaf
         problems = modulestore().get_items(reusable_location, category='problem')
         locn_to_del = problems[0].location
-        new_course_loc = modulestore().delete_item(locn_to_del, 'deleting_user', delete_children=False)
+        new_course_loc = modulestore().delete_item(locn_to_del, 'deleting_user')
         deleted = locn_to_del.version_agnostic()
         self.assertFalse(modulestore().has_item(deleted))
         with self.assertRaises(VersionConflictError):
@@ -1317,7 +1317,7 @@ class TestItemCrud(SplitModuleTest):
 
         # delete a subtree
         nodes = modulestore().get_items(reusable_location, category='chapter')
-        new_course_loc = modulestore().delete_item(nodes[0].location, 'deleting_user', delete_children=True)
+        new_course_loc = modulestore().delete_item(nodes[0].location, 'deleting_user')
         # check subtree
 
         def check_subtree(node):

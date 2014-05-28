@@ -57,7 +57,8 @@ def path_to_location(modulestore, usage_key):
             # isn't found so we don't have to do it explicitly.  Call this
             # first to make sure the location is there (even if it's a course, and
             # we would otherwise immediately exit).
-            parents = modulestore.get_parent_locations(next_usage)
+            # NAATODO -- fix w/ branch logic
+            parents = modulestore.get_parent_locations(next_usage, revision='published')
 
             # print 'Processing loc={0}, path={1}'.format(next_usage, path)
             if next_usage.definition_key.block_type == "course":

@@ -255,11 +255,14 @@ class ModuleStoreWrite(ModuleStoreRead):
     @abstractmethod
     def delete_item(self, location, user_id=None, **kwargs):
         """
-        Delete an item from persistence. Pass the user's unique id which the persistent store
+        Delete an item and its subtree from persistence. Remove the item from any parents (Note, does not
+        affect parents from other branches or logical branches; thus, in old mongo, deleting something
+        whose parent cannot be draft, deletes it from both but deleting a component under a draft vertical
+        only deletes it from the draft.
+
+        Pass the user's unique id which the persistent store
         should save with the update if it has that ability.
 
-        :param delete_all_versions: removes both the draft and published version of this item from
-        the course if using draft and old mongo. Split may or may not implement this.
         :param force: fork the structure and don't update the course draftVersion if there's a version
         conflict (only applicable to version tracking and conflict detecting persistence stores)
 
@@ -415,7 +418,7 @@ class ModuleStoreWriteBase(ModuleStoreReadBase, ModuleStoreWrite):
         """
         raise NotImplementedError
 
-    def delete_item(self, location, user_id=None, delete_all_versions=False, delete_children=False, force=False):
+    def delete_item(self, location, user_id=None, force=False):
         """
         Delete an item from persistence. Pass the user's unique id which the persistent store
         should save with the update if it has that ability.

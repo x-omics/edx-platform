@@ -60,7 +60,8 @@ def get_parent_xblock(xblock):
     Returns the xblock that is the parent of the specified xblock, or None if it has no parent.
     """
     locator = xblock.location
-    parent_locations = modulestore().get_parent_locations(locator,)
+    # NAATODO -- replace revision w/ branch logic so it does right thing in preview
+    parent_locations = modulestore().get_parent_locations(locator, revision='published')
 
     if len(parent_locations) == 0:
         return None

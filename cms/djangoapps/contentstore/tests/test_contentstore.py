@@ -650,9 +650,7 @@ class ContentStoreToyCourseTest(ModuleStoreTestCase):
             depth=1
         )
 
-        draft_store.convert_to_draft(vertical.location, 0)
-        for child in vertical.get_children():
-            draft_store.convert_to_draft(child.location, 0)
+        draft_store.convert_to_draft(vertical.location, '**replace_user**')
 
         items = module_store.get_items(source_course_id, revision='draft')
         self.assertGreater(len(items), 0)
@@ -799,9 +797,7 @@ class ContentStoreToyCourseTest(ModuleStoreTestCase):
         # get a vertical (and components in it) to put into 'draft'
         vertical = module_store.get_item(course_id.make_usage_key('vertical', 'vertical_test'), depth=1)
 
-        draft_store.convert_to_draft(vertical.location, 0)
-        for child in vertical.get_children():
-            draft_store.convert_to_draft(child.location, 0)
+        draft_store.convert_to_draft(vertical.location, '**replace_user**')
 
         # delete the course
         delete_course(module_store, content_store, course_id, commit=True)
@@ -853,9 +849,7 @@ class ContentStoreToyCourseTest(ModuleStoreTestCase):
         # get the original vertical (and components in it) to put into 'draft'
         vertical = module_store.get_item(course_id.make_usage_key('vertical', 'vertical_test'), depth=1)
         self.assertEqual(len(orphan_vertical.children), len(vertical.children))
-        draft_store.convert_to_draft(vertical.location, 0)
-        for child in vertical.get_children():
-            draft_store.convert_to_draft(child.location, 0)
+        draft_store.convert_to_draft(vertical.location, '**replace_user**')
 
         root_dir = path(mkdtemp_clean())
 

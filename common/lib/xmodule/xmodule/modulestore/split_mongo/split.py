@@ -1289,8 +1289,7 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
         """
         self.db_connection.update_course_index(updated_index_entry)
 
-    # TODO impl delete_all_versions
-    def delete_item(self, usage_locator, user_id, delete_all_versions=False, delete_children=False, force=False):
+    def delete_item(self, usage_locator, user_id, force=False):
         """
         Delete the block or tree rooted at block (if delete_children) and any references w/in the course to the block
         from a new version of the course structure.
@@ -1331,10 +1330,8 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
             for child in new_blocks[encoded_block_id]['fields'].get('children', []):
                 remove_subtree(child)
             del new_blocks[encoded_block_id]
-        if delete_children:
-            remove_subtree(usage_locator.block_id)
-        else:
-            del new_blocks[LocMapperStore.encode_key_for_mongo(usage_locator.block_id)]
+
+        remove_subtree(usage_locator.block_id)
 
         # update index if appropriate and structures
         self.db_connection.insert_structure(new_structure)

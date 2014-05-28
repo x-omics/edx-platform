@@ -257,7 +257,7 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
         course = self.store.get_course(self.course_locations[self.MONGO_COURSEID].course_key)
         self.assertTrue(course.show_calculator)
 
-    @ddt.data('direct', 'split')
+    @ddt.data('draft', 'split')
     def test_delete_item(self, default_ms):
         """
         Delete should reject on r/o db and work on r/w one
@@ -265,7 +265,7 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
         self.initdb(default_ms)
         # r/o try deleting the course (is here to ensure it can't be deleted)
         with self.assertRaises(AttributeError):
-            self.store.delete_item(self.xml_chapter_location)
+            self.store.delete_item(self.xml_chapter_location, '**replace_user**')
         self.store.delete_item(self.import_chapter_location, '**replace_user**')
         # verify it's gone
         with self.assertRaises(ItemNotFoundError):

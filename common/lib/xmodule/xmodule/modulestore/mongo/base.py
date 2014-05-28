@@ -264,6 +264,27 @@ def location_to_query(location, wildcard=True, tag='i4x'):
     return query
 
 
+# Things w/ these categories should never be marked as version='draft'
+DIRECT_ONLY_CATEGORIES = ['course', 'chapter', 'sequential', 'about', 'static_tab', 'course_info']
+DRAFT = 'draft'
+
+
+def as_draft(location):
+    """
+    Returns the Location that is the draft for `location`
+    """
+    if location.category in DIRECT_ONLY_CATEGORIES:
+        return location
+    return location.replace(revision=DRAFT)
+
+
+def as_published(location):
+    """
+    Returns the Location that is the published version for `location`
+    """
+    return location.replace(revision=None)
+
+
 class MongoModuleStore(ModuleStoreWriteBase):
     """
     A Mongodb backed ModuleStore
@@ -899,41 +920,40 @@ class MongoModuleStore(ModuleStoreWriteBase):
                         value[key] = subvalue.to_deprecated_string()
         return jsonfields
 
-    # pylint: disable=unused-argument
-    def delete_item(self, location, user_id, **kwargs):
-        """
-        Delete an item from this modulestore.
+    def get_parent_locations(self, location, revision=None):
+        '''
+        Find all locations that are the parents of this location in this
+        course.  Needed for path_to_location().
+
+        Returns w/ revision set. If a block has both a draft a non-draft parent, it returns both
+        unless you pass revision.
 
         Args:
-            location (UsageKey)
-        """
-        # pylint: enable=unused-argument
-        # VS[compat] cdodge: This is a hack because static_tabs also have references from the course module, so
-        # if we add one then we need to also add it to the policy information (i.e. metadata)
-        # we should remove this once we can break this reference from the course to static tabs
-        if location.category == 'static_tab':
-            item = self.get_item(location)
-            course = self._get_course_for_item(item.scope_ids.usage_id)
-            existing_tabs = course.tabs or []
-            course.tabs = [tab for tab in existing_tabs if tab.get('url_slug') != location.name]
-            self.update_item(course, user_id)
-
-        # Must include this to avoid the django debug toolbar (which defines the deprecated "safe=False")
-        # from overriding our default value set in the init method.
-        self.collection.remove({'_id': location.to_deprecated_son()}, safe=self.collection.safe)
-        # recompute (and update) the metadata inheritance tree which is cached
-        self.refresh_cached_metadata_inheritance_tree(location.course_key)
-
-    def get_parent_locations(self, location):
-        '''Find all locations that are the parents of this location in this
-        course.  Needed for path_to_location().
+            revision: 'draft', 'published', or None.
+                whether to only look for draft or published branch. If you don't
+                set revision, you can get more than one parent. For
+                example, if in draft, you've moved the child from one parent to another, then you'll
+                get the published version's parent and the draft version's parent as 2 separate values.
+                None means all parents.
         '''
+        if revision is None and location.revision is None:
+            revision = 'all'
+        elif revision != DRAFT and location.revision != DRAFT:
+            revision = None
+        elif location.revision == DRAFT:
+            revision = DRAFT
+            location = as_published(location)
         query = self._course_key_to_son(location.course_key)
         query['definition.children'] = location.to_deprecated_string()
-        items = self.collection.find(query, {'_id': True})
+        items = self.collection.find(query, {'_id': True}, sort=[('revision', pymongo.ASCENDING)])
         return [
-            location.course_key.make_usage_key(i['_id']['category'], i['_id']['name'])
+            Location._from_deprecated_son(i['_id'], location.course_key.run)
             for i in items
+            if (
+                i['_id']['category'] in DIRECT_ONLY_CATEGORIES
+                or revision == 'all'
+                or i['_id']['revision'] == revision
+            )
         ]
 
     def get_modulestore_type(self, course_id):

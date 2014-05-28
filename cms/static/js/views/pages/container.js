@@ -151,8 +151,7 @@ define(["jquery", "underscore", "gettext", "js/views/feedback_notification",
                                 return $.ajax({
                                     type: 'DELETE',
                                     url: self.getURLRoot() + "/" +
-                                        xblockElement.data('locator') + "?" +
-                                        $.param({recurse: true, all_versions: false})
+                                        xblockElement.data('locator')
                                 }).success(function() {
                                     // get the parent so we can remove this component from its parent.
                                     var parent = self.findXBlockElement(xblockElement.parent());

@@ -3,6 +3,7 @@ Test the publish code (mostly testing that publishing doesn't result in orphans)
 """
 from xmodule.modulestore.exceptions import ItemNotFoundError
 from xmodule.modulestore.tests.test_split_w_old_mongo import SplitWMongoCourseBoostrapper
+from xmodule.modulestore.mongo.draft import DRAFT
 
 
 class TestPublish(SplitWMongoCourseBoostrapper):
@@ -69,10 +70,8 @@ class TestPublish(SplitWMongoCourseBoostrapper):
         """
         location = self.old_course_key.make_usage_key('vertical', name='Vert1')
         item = self.draft_mongo.get_item(location, 2)
-        self._xmodule_recurse(
-            item,
-            lambda i: self.draft_mongo.publish(i.location, self.userid)
-        )
+        self.draft_mongo.publish(item.location, self.userid)
+
         # verify status
         item = self.draft_mongo.get_item(location, 0)
         self.assertFalse(getattr(item, 'is_draft', False), "Item was published. Draft should not exist")
@@ -88,10 +87,11 @@ class TestPublish(SplitWMongoCourseBoostrapper):
 
         # delete the discussion (which oddly is not in draft mode)
         location = self.old_course_key.make_usage_key('discussion', name='Discussion1')
-        self.draft_mongo.delete_item(location)
-        # remove pointer from draft vertical (verify presence first to ensure process is valid)
-        self.assertIn(location, draft_vert.children)
-        draft_vert.children.remove(location)
+        self.draft_mongo.delete_item(location, None, revision=DRAFT)
+
+        draft_vert = self.draft_mongo.get_item(draft_vert.location, 0)
+        # remove pointer from draft vertical (still there b/c not refetching vert)
+        self.assertNotIn(location, draft_vert.children)
         # move the other child
         other_child_loc = self.old_course_key.make_usage_key('html', name='Html2')
         draft_vert.children.remove(other_child_loc)
@@ -100,10 +100,7 @@ class TestPublish(SplitWMongoCourseBoostrapper):
         self.draft_mongo.update_item(draft_vert, self.userid)
         self.draft_mongo.update_item(other_vert, self.userid)
         # publish
-        self._xmodule_recurse(
-            draft_vert,
-            lambda i: self.draft_mongo.publish(i.location, self.userid)
-        )
+        self.draft_mongo.publish(draft_vert.location, self.userid)
         item = self.old_mongo.get_item(draft_vert.location, 0)
         self.assertNotIn(location, item.children)
         with self.assertRaises(ItemNotFoundError):
