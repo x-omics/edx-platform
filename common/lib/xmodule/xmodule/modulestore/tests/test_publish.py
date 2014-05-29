@@ -79,7 +79,7 @@ class TestPublish(SplitWMongoCourseBoostrapper):
         # however, children are still draft, but I'm not sure that's by design
 
         # convert back to draft
-        self.draft_mongo.convert_to_draft(location)
+        self.draft_mongo.convert_to_draft(location, 0)
         # both draft and published should exist
         draft_vert = self.draft_mongo.get_item(location, 0)
         self.assertTrue(getattr(draft_vert, 'is_draft', False), "Item was converted to draft but doesn't say so")

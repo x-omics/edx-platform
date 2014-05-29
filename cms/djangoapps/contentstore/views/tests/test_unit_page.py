@@ -30,7 +30,7 @@ class UnitPageTestCase(StudioPageTestCase):
         """
         Verify that an xblock returns the expected HTML for a draft unit page.
         """
-        draft_unit = modulestore('draft').convert_to_draft(self.vertical.location)
+        draft_unit = modulestore().convert_to_draft(self.vertical.location, 0)
         html = self.get_page_html(draft_unit)
         self.validate_html_for_add_buttons(html)
 
@@ -45,8 +45,8 @@ class UnitPageTestCase(StudioPageTestCase):
         """
         Verify that a draft xblock's preview returns the expected HTML.
         """
-        modulestore('draft').convert_to_draft(self.vertical.location)
-        draft_video = modulestore('draft').convert_to_draft(self.video.location)
+        modulestore().convert_to_draft(self.vertical.location, 0)
+        draft_video = modulestore().convert_to_draft(self.video.location, 0)
         self.validate_preview_html(draft_video, 'student_view',
                                    can_edit=True, can_reorder=True, can_add=False)
 
@@ -71,7 +71,7 @@ class UnitPageTestCase(StudioPageTestCase):
                                              category='split_test', display_name='Split Test')
         ItemFactory.create(parent_location=child_container.location,
                            category='html', display_name='grandchild')
-        modulestore('draft').convert_to_draft(self.vertical.location)
+        modulestore().convert_to_draft(self.vertical.location, 0)
         draft_child_container = modulestore('draft').get_item(child_container.location)
         self.validate_preview_html(draft_child_container, 'student_view',
                                    can_reorder=True, can_edit=True, can_add=False)

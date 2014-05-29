@@ -114,6 +114,7 @@ update_module_store_settings(
         'data_dir': COMMON_TEST_DATA_ROOT,
     }
 )
+MODULESTORE_BRANCH = 'draft'
 
 CONTENTSTORE = {
     'ENGINE': 'xmodule.contentstore.mongo.MongoContentStore',

@@ -188,7 +188,7 @@ class TemplateTests(unittest.TestCase):
         self.assertIsNotNone(updated_problem.previous_version)
         self.assertEqual(updated_problem.previous_version, first_problem.update_version)
         self.assertNotEqual(updated_problem.update_version, first_problem.update_version)
-        updated_loc = modulestore('split').delete_item(updated_problem.location, 'testbot', delete_children=True)
+        updated_loc = modulestore('split').delete_item(updated_problem.location, '**replace_user**', 'testbot', delete_children=True)
 
         second_problem = persistent_factories.ItemFactory.create(
             display_name='problem 2',

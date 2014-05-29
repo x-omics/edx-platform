@@ -70,6 +70,7 @@ update_module_store_settings(
         'collection': 'test_modulestore{0}'.format(uuid4().hex[:5]),
     }
 )
+MODULESTORE_BRANCH = 'draft'
 
 CONTENTSTORE = {
     'ENGINE': 'xmodule.contentstore.mongo.MongoContentStore',

@@ -34,7 +34,7 @@ class CourseDetails(object):
         """
         Fetch the course details for the given course from persistence and return a CourseDetails model.
         """
-        descriptor = modulestore('direct').get_course(course_key)
+        descriptor = modulestore().get_course(course_key)
         course_details = cls(course_key.org, course_key.course, course_key.run)
 
         course_details.start_date = descriptor.start
@@ -86,7 +86,7 @@ class CourseDetails(object):
         temploc = course_key.make_usage_key('about', about_key)
         store = get_modulestore(temploc)
         if data is None:
-            store.delete_item(temploc)
+            store.delete_item(temploc, user.id)
         else:
             try:
                 about_item = store.get_item(temploc)
@@ -100,7 +100,7 @@ class CourseDetails(object):
         """
         Decode the json into CourseDetails and save any changed attrs to the db
         """
-        module_store = modulestore('direct')
+        module_store = modulestore()
         descriptor = module_store.get_course(course_key)
 
         dirty = False

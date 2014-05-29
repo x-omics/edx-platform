@@ -11,9 +11,11 @@ import pymongo
 from pytz import UTC
 
 from xmodule.exceptions import InvalidVersionError
+from xmodule.modulestore import PublishState
 from xmodule.modulestore.exceptions import ItemNotFoundError, DuplicateItemError
 from xmodule.modulestore.mongo.base import MongoModuleStore
 from opaque_keys.edx.locations import Location
+from xmodule.modulestore.branch_setting import BranchSetting
 
 DRAFT = 'draft'
 # Things w/ these categories should never be marked as version='draft'
@@ -59,14 +61,9 @@ class DraftModuleStore(MongoModuleStore):
     def get_item(self, usage_key, depth=0):
         """
         Returns an XModuleDescriptor instance for the item at usage_key.
-        If usage_key.revision is None, returns the item with the most
-        recent revision
 
-        If any segment of the usage_key is None except revision, raises
-            xmodule.modulestore.exceptions.InsufficientSpecificationError
-
-        If no object is found at that usage_key, raises
-            xmodule.modulestore.exceptions.ItemNotFoundError
+        if BranchSetting is draft, returns either draft or published item, preferring draft
+        else, returns only the published item
 
         usage_key: A :class:`.UsageKey` instance
 
@@ -74,8 +71,15 @@ class DraftModuleStore(MongoModuleStore):
             descendents of the queried modules for more efficient results later
             in the request. The depth is counted in the number of calls to
             get_children() to cache. None indicates to cache all descendents
+
+        Raises:
+            xmodule.modulestore.exceptions.InsufficientSpecificationError
+            if any segment of the usage_key is None except revision
+
+            xmodule.modulestore.exceptions.ItemNotFoundError if no object
+            is found at that usage_key
         """
-        if usage_key.category not in DIRECT_ONLY_CATEGORIES:
+        if BranchSetting.is_draft() and (usage_key.category not in DIRECT_ONLY_CATEGORIES):
             try:
                 return wrap_draft(super(DraftModuleStore, self).get_item(as_draft(usage_key), depth=depth))
             except ItemNotFoundError:
@@ -93,39 +97,40 @@ class DraftModuleStore(MongoModuleStore):
         :param metadata: can be empty, the initial metadata for the kvs
         :param system: if you already have an xmodule from the course, the xmodule.system value
         """
+        assert BranchSetting.is_draft()
+
         if location.category not in DIRECT_ONLY_CATEGORIES:
             location = as_draft(location)
         return super(DraftModuleStore, self).create_xmodule(location, definition_data, metadata, system, fields)
 
-    def get_items(self, course_key, settings=None, content=None, revision=None, **kwargs):
+    def get_items(self, course_key, settings=None, content=None, **kwargs):
         """
         Returns:
             list of XModuleDescriptor instances for the matching items within the course with
             the given course_key
 
-        NOTE: don't use this to look for courses
-        as the course_key is required. Use get_courses.
+            if BranchSetting is draft, returns both draft and publish items, preferring the draft ones
+            else, returns only the published items
+
+        NOTE: don't use this to look for courses as the course_key is required. Use get_courses instead.
 
         Args:
             course_key (CourseKey): the course identifier
             settings: not used
             content: not used
-            revision (str): the revision of the items you're looking for. Only 'draft' makes sense for
-                this modulestore. None implies get one of either the draft or published for each
-                matching xblock preferring the draft if it exists.
             kwargs (key=value): what to look for within the course.
                 Common qualifiers are ``category`` or any field name. if the target field is a list,
                 then it searches for the given value in the list not list equivalence.
                 Substring matching pass a regex object.
                 ``name`` is another commonly provided key (Location based stores)
         """
-        draft_items = [
-            wrap_draft(item) for item in
-            super(DraftModuleStore, self).get_items(course_key, revision='draft', **kwargs)
-        ]
-        if revision == 'draft':
-            # the user only wants the drafts not everything w/ preference for draft
-            return draft_items
+
+        draft_items = []
+        if BranchSetting.is_draft():
+            draft_items = [
+                wrap_draft(item) for item in
+                super(DraftModuleStore, self).get_items(course_key, revision='draft', **kwargs)
+            ]
         draft_items_locations = {item.location for item in draft_items}
         non_draft_items = [
             item for item in
@@ -135,18 +140,20 @@ class DraftModuleStore(MongoModuleStore):
         ]
         return draft_items + non_draft_items
 
-    def convert_to_draft(self, source_location):
+    def convert_to_draft(self, location, user_id):
         """
         Create a copy of the source and mark its revision as draft.
 
-        :param source: the location of the source (its revision must be None)
+        :param location: the location of the source (its revision must be None)
         """
-        if source_location.category in DIRECT_ONLY_CATEGORIES:
-            raise InvalidVersionError(source_location)
-        original = self.collection.find_one({'_id': source_location.to_deprecated_son()})
+        assert BranchSetting.is_draft()
+
+        if location.category in DIRECT_ONLY_CATEGORIES:
+            raise InvalidVersionError(location)
+        original = self.collection.find_one({'_id': location.to_deprecated_son()})
         if not original:
-            raise ItemNotFoundError(source_location)
-        draft_location = as_draft(source_location)
+            raise ItemNotFoundError(location)
+        draft_location = as_draft(location)
         original['_id'] = draft_location.to_deprecated_son()
         try:
             self.collection.insert(original)
@@ -155,7 +162,7 @@ class DraftModuleStore(MongoModuleStore):
 
         self.refresh_cached_metadata_inheritance_tree(draft_location.course_key)
 
-        return wrap_draft(self._load_items(source_location.course_key, [original])[0])
+        return wrap_draft(self._load_items(location.course_key, [original])[0])
 
     def update_item(self, xblock, user_id=None, allow_not_found=False, force=False):
         """
@@ -163,13 +170,15 @@ class DraftModuleStore(MongoModuleStore):
         In addition to the superclass's behavior, this method converts the unit to draft if it's not
         already draft.
         """
+        assert BranchSetting.is_draft()
+
         if xblock.location.category in DIRECT_ONLY_CATEGORIES:
             return super(DraftModuleStore, self).update_item(xblock, user_id, allow_not_found)
 
         draft_loc = as_draft(xblock.location)
         try:
             if not self.has_item(draft_loc):
-                self.convert_to_draft(xblock.location)
+                self.convert_to_draft(xblock.location, user_id)
         except ItemNotFoundError:
             if not allow_not_found:
                 raise
@@ -179,25 +188,29 @@ class DraftModuleStore(MongoModuleStore):
         # don't allow locations to truly represent themselves as draft outside of this file
         xblock.location = as_published(xblock.location)
 
-    def delete_item(self, location, delete_all_versions=False, **kwargs):
+    def delete_item(self, location, user_id, delete_all_versions=False, **kwargs):
         """
         Delete an item from this modulestore
 
         location: Something that can be passed to Location
         """
-        if location.category in DIRECT_ONLY_CATEGORIES:
-            return super(DraftModuleStore, self).delete_item(as_published(location))
+        assert BranchSetting.is_draft()
 
-        super(DraftModuleStore, self).delete_item(as_draft(location))
+        if location.category in DIRECT_ONLY_CATEGORIES:
+            return super(DraftModuleStore, self).delete_item(as_published(location), user_id)
+
+        super(DraftModuleStore, self).delete_item(as_draft(location), user_id)
         if delete_all_versions:
-            super(DraftModuleStore, self).delete_item(as_published(location))
+            super(DraftModuleStore, self).delete_item(as_published(location), user_id)
 
         return
 
-    def publish(self, location, published_by_id):
+    def publish(self, location, user_id):
         """
         Save a current draft to the underlying modulestore
         """
+        assert BranchSetting.is_draft()
+
         if location.category in DIRECT_ONLY_CATEGORIES:
             # ignore noop attempt to publish something that can't be draft.
             # ignoring v raising exception b/c bok choy tests always pass make_public which calls publish
@@ -210,7 +223,7 @@ class DraftModuleStore(MongoModuleStore):
         draft = self.get_item(location)
 
         draft.published_date = datetime.now(UTC)
-        draft.published_by = published_by_id
+        draft.published_by = user_id
         if draft.has_children:
             if original_published is not None:
                 # see if children were deleted. 2 reasons for children lists to differ:
@@ -220,16 +233,18 @@ class DraftModuleStore(MongoModuleStore):
                     if child not in draft.children:
                         rents = self.get_parent_locations(child)
                         if (len(rents) == 1 and rents[0] == location):  # the 1 is this original_published
-                            self.delete_item(child, True)
-        super(DraftModuleStore, self).update_item(draft, '**replace_user**')
-        self.delete_item(location)
+                            self.delete_item(child, user_id, True)
+        super(DraftModuleStore, self).update_item(draft, user_id)
+        self.delete_item(location, user_id)
 
-    def unpublish(self, location):
+    def unpublish(self, location, user_id):
         """
         Turn the published version into a draft, removing the published version
         """
-        self.convert_to_draft(location)
-        super(DraftModuleStore, self).delete_item(location)
+        assert BranchSetting.is_draft()
+
+        self.convert_to_draft(location, user_id)
+        super(DraftModuleStore, self).delete_item(location, user_id)
 
     def _query_children_for_cache_children(self, course_key, items):
         # first get non-draft in a round-trip
@@ -263,3 +278,24 @@ class DraftModuleStore(MongoModuleStore):
         queried_children = to_process_dict.values()
 
         return queried_children
+
+    def compute_publish_state(self, xblock):
+        """
+        Returns whether this xblock is 'draft', 'public', or 'private'.
+
+        'draft' content is in the process of being edited, but still has a previous
+            version visible in the LMS
+        'public' content is locked and visible in the LMS
+        'private' content is editable and not visible in the LMS
+        """
+        if getattr(xblock, 'is_draft', False):
+            published_xblock_location = as_published(xblock.location)
+            published_item = self.collection.find_one(
+                {'_id': published_xblock_location.to_deprecated_son()}
+            )
+            if not published_item:
+                return PublishState.private
+            else:
+                return PublishState.draft
+        else:
+            return PublishState.public

@@ -20,13 +20,23 @@ from opaque_keys import InvalidKeyError
 from opaque_keys.edx.locations import SlashSeparatedCourseKey
 from xblock.runtime import Mixologist
 from xblock.core import XBlock
-import datetime
 
 log = logging.getLogger('edx.modulestore')
 
 SPLIT_MONGO_MODULESTORE_TYPE = 'split'
 MONGO_MODULESTORE_TYPE = 'mongo'
 XML_MODULESTORE_TYPE = 'xml'
+
+
+class PublishState(object):
+    """
+    The publish state for a given xblock-- either 'draft', 'private', or 'public'.
+
+    Currently in CMS, an xblock can only be in 'draft' or 'private' if it is at or below the Unit level.
+    """
+    draft = 'draft'
+    private = 'private'
+    public = 'public'
 
 
 class ModuleStoreRead(object):

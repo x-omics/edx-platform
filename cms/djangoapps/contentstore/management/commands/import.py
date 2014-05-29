@@ -37,12 +37,7 @@ class Command(BaseCommand):
             data=data_dir,
             courses=course_dirs,
             dis=do_import_static))
-        try:
-            mstore = modulestore('direct')
-        except KeyError:
-            self.stdout.write('Unable to load direct modulestore, trying '
-                              'default\n')
-            mstore = modulestore('default')
+        mstore = modulestore()
 
         _, course_items = import_from_xml(
             mstore, data_dir, course_dirs, load_error_modules=False,

@@ -17,9 +17,10 @@ from contentstore.utils import reverse_usage_url
 from contentstore.views.component import component_handler
 
 from contentstore.tests.utils import CourseTestCase
-from contentstore.utils import compute_publish_state, PublishState
+from contentstore.utils import compute_publish_state
 from student.tests.factories import UserFactory
 from xmodule.capa_module import CapaDescriptor
+from xmodule.modulestore import PublishState
 from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.exceptions import ItemNotFoundError
 from opaque_keys.edx.keys import UsageKey

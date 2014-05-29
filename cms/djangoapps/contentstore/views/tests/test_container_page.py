@@ -3,8 +3,9 @@ Unit tests for the container page.
 """
 
 import re
-from contentstore.utils import compute_publish_state, PublishState
+from contentstore.utils import compute_publish_state
 from contentstore.views.tests.utils import StudioPageTestCase
+from xmodule.modulestore import PublishState
 from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.tests.factories import ItemFactory
 
@@ -81,9 +82,9 @@ class ContainerPageTestCase(StudioPageTestCase):
         test_container_html(published_container)
 
         # Now make the unit and its children into a draft and validate the container again
-        modulestore('draft').convert_to_draft(self.vertical.location)
-        modulestore('draft').convert_to_draft(self.child_vertical.location)
-        draft_container = modulestore('draft').convert_to_draft(published_container.location)
+        modulestore().convert_to_draft(self.vertical.location, 0)
+        modulestore().convert_to_draft(self.child_vertical.location, 0)
+        draft_container = modulestore().convert_to_draft(published_container.location, 0)
         test_container_html(draft_container)
 
     def _test_html_content(self, xblock, expected_section_tag, expected_breadcrumbs):
@@ -121,9 +122,9 @@ class ContainerPageTestCase(StudioPageTestCase):
         """
         Verify that a draft xblock's container preview returns the expected HTML.
         """
-        draft_unit = modulestore('draft').convert_to_draft(self.vertical.location)
-        draft_child_container = modulestore('draft').convert_to_draft(self.child_container.location)
-        draft_child_vertical = modulestore('draft').convert_to_draft(self.child_vertical.location)
+        draft_unit = modulestore().convert_to_draft(self.vertical.location, 0)
+        draft_child_container = modulestore().convert_to_draft(self.child_container.location, 0)
+        draft_child_vertical = modulestore().convert_to_draft(self.child_vertical.location, 0)
         self.validate_preview_html(draft_unit, self.container_view,
                                    can_edit=True, can_reorder=True, can_add=True)
         self.validate_preview_html(draft_child_container, self.container_view,
@@ -146,7 +147,7 @@ class ContainerPageTestCase(StudioPageTestCase):
         """
         empty_child_container = ItemFactory.create(parent_location=self.vertical.location,
                                                    category='split_test', display_name='Split Test')
-        modulestore('draft').convert_to_draft(self.vertical.location)
-        draft_empty_child_container = modulestore('draft').convert_to_draft(empty_child_container.location)
+        modulestore().convert_to_draft(self.vertical.location, 0)
+        draft_empty_child_container = modulestore().convert_to_draft(empty_child_container.location, 0)
         self.validate_preview_html(draft_empty_child_container, self.reorderable_child_view,
                                    can_reorder=True, can_edit=True, can_add=False)

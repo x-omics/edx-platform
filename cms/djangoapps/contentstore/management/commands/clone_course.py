@@ -35,10 +35,8 @@ class Command(BaseCommand):
         source_course_id = self.course_key_from_arg(args[0])
         dest_course_id = self.course_key_from_arg(args[1])
 
-        mstore = modulestore('direct')
+        mstore = modulestore()
         cstore = contentstore()
-
-        mstore.ignore_write_events_on_courses.add(dest_course_id)
 
         print("Cloning course {0} to {1}".format(source_course_id, dest_course_id))
 

@@ -217,13 +217,12 @@ def import_handler(request, course_key_string):
                             shutil.move(dirpath / fname, course_dir)
 
                     _module_store, course_items = import_from_xml(
-                        modulestore('direct'),
+                        modulestore(),
                         settings.GITHUB_REPO_ROOT,
                         [course_subdir],
                         load_error_modules=False,
                         static_content_store=contentstore(),
-                        target_course_id=course_key,
-                        draft_store=modulestore()
+                        target_course_id=course_key
                     )
 
                     new_location = course_items[0].location
@@ -322,7 +321,7 @@ def export_handler(request, course_key_string):
         root_dir = path(mkdtemp())
 
         try:
-            export_to_xml(modulestore('direct'), contentstore(), course_module.id, root_dir, name, modulestore())
+            export_to_xml(modulestore(), contentstore(), course_module.id, root_dir, name)
 
             logging.debug('tar file being generated at {0}'.format(export_file.name))
             with tarfile.open(name=export_file.name, mode='w:gz') as tar_file:

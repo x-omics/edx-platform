@@ -13,6 +13,7 @@ from edxmako.shortcuts import render_to_response
 
 from util.date_utils import get_default_time_display
 from xmodule.modulestore.django import modulestore
+from xmodule.modulestore import PublishState
 
 from xblock.core import XBlock
 from xblock.django.request import webob_to_django_response, django_to_webob_request
@@ -21,7 +22,7 @@ from xblock.fields import Scope
 from xblock.plugin import PluginMissingError
 from xblock.runtime import Mixologist
 
-from contentstore.utils import get_lms_link_for_item, compute_publish_state, PublishState, get_modulestore
+from contentstore.utils import get_lms_link_for_item, compute_publish_state, get_modulestore
 from contentstore.views.helpers import get_parent_xblock
 
 from models.settings.course_grading import CourseGradingModel

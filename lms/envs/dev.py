@@ -142,6 +142,8 @@ META_UNIVERSITIES = {'UTx': ['UTAustinX']}
 
 COMMENTS_SERVICE_KEY = "PUT_YOUR_API_KEY_HERE"
 
+MODULESTORE_BRANCH = 'published'
+
 ############################## Course static files ##########################
 if os.path.isdir(DATA_DIR):
     # Add the full course repo if there is no static directory

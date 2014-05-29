@@ -35,7 +35,6 @@ from xmodule.modulestore import ModuleStoreWriteBase, MONGO_MODULESTORE_TYPE
 from opaque_keys.edx.locations import Location
 from xmodule.modulestore.exceptions import ItemNotFoundError, InvalidLocationError
 from xmodule.modulestore.inheritance import own_metadata, InheritanceMixin, inherit_metadata, InheritanceKeyValueStore
-from xmodule.tabs import StaticTab, CourseTabList
 from xblock.core import XBlock
 from opaque_keys.edx.locations import SlashSeparatedCourseKey
 
@@ -322,8 +321,6 @@ class MongoModuleStore(ModuleStoreWriteBase):
         self.render_template = render_template
         self.i18n_service = i18n_service
 
-        self.ignore_write_events_on_courses = set()
-
     def _compute_metadata_inheritance_tree(self, course_id):
         '''
         TODO (cdodge) This method can be deleted when the 'split module store' work has been completed
@@ -444,10 +441,9 @@ class MongoModuleStore(ModuleStoreWriteBase):
         If given a runtime, it replaces the cached_metadata in that runtime. NOTE: failure to provide
         a runtime may mean that some objects report old values for inherited data.
         """
-        if course_id not in self.ignore_write_events_on_courses:
-            cached_metadata = self._get_cached_metadata_inheritance_tree(course_id, force_refresh=True)
-            if runtime:
-                runtime.cached_metadata = cached_metadata
+        cached_metadata = self._get_cached_metadata_inheritance_tree(course_id, force_refresh=True)
+        if runtime:
+            runtime.cached_metadata = cached_metadata
 
     def _clean_item_data(self, item):
         """
@@ -748,7 +744,8 @@ class MongoModuleStore(ModuleStoreWriteBase):
                 ]))
 
         location = course_id.make_usage_key('course', course_id.run)
-        course = self.create_and_save_xmodule(location, fields=fields, **kwargs)
+        course = self.create_xmodule(location, fields=fields, **kwargs)
+        self.update_item(course, user_id)
 
         # clone a default 'about' overview module as well
         about_location = location.replace(
@@ -756,11 +753,12 @@ class MongoModuleStore(ModuleStoreWriteBase):
             name='overview'
         )
         overview_template = AboutDescriptor.get_template('overview.yaml')
-        self.create_and_save_xmodule(
+        new_object = self.create_xmodule(
             about_location,
-            system=course.system,
-            definition_data=overview_template.get('data')
+            definition_data=overview_template.get('data'),
+            system=course.system
         )
+        self.update_item(new_object, user_id, allow_not_found=True)
 
         return course
 
@@ -825,41 +823,6 @@ class MongoModuleStore(ModuleStoreWriteBase):
         xmodule.save()
         return xmodule
 
-    def create_and_save_xmodule(self, location, definition_data=None, metadata=None, system=None,
-                                fields={}):
-        """
-        Create the new xmodule and save it. Does not return the new module because if the caller
-        will insert it as a child, it's inherited metadata will completely change. The difference
-        between this and just doing create_xmodule and update_item is this ensures static_tabs get
-        pointed to by the course.
-
-        :param location: a Location--must have a category
-        :param definition_data: can be empty. The initial definition_data for the kvs
-        :param metadata: can be empty, the initial metadata for the kvs
-        :param system: if you already have an xblock from the course, the xblock.runtime value
-        """
-        # differs from split mongo in that I believe most of this logic should be above the persistence
-        # layer but added it here to enable quick conversion. I'll need to reconcile these.
-        new_object = self.create_xmodule(location, definition_data, metadata, system, fields)
-        location = new_object.scope_ids.usage_id
-        self.update_item(new_object, allow_not_found=True)
-
-        # VS[compat] cdodge: This is a hack because static_tabs also have references from the course module, so
-        # if we add one then we need to also add it to the policy information (i.e. metadata)
-        # we should remove this once we can break this reference from the course to static tabs
-        # TODO move this special casing to app tier (similar to attaching new element to parent)
-        if location.category == 'static_tab':
-            course = self._get_course_for_item(location)
-            course.tabs.append(
-                StaticTab(
-                    name=new_object.display_name,
-                    url_slug=new_object.scope_ids.usage_id.name,
-                )
-            )
-            self.update_item(course)
-
-        return new_object
-
     def _get_course_for_item(self, location, depth=0):
         '''
         for a given Xmodule, return the course that it belongs to
@@ -907,15 +870,6 @@ class MongoModuleStore(ModuleStoreWriteBase):
                 children = self._convert_reference_fields_to_strings(xblock, {'children': xblock.children})
                 payload.update({'definition.children': children['children']})
             self._update_single_item(xblock.scope_ids.usage_id, payload)
-            # for static tabs, their containing course also records their display name
-            if xblock.scope_ids.block_type == 'static_tab':
-                course = self._get_course_for_item(xblock.scope_ids.usage_id)
-                # find the course's reference to this tab and update the name.
-                static_tab = CourseTabList.get_tab_by_slug(course.tabs, xblock.scope_ids.usage_id.name)
-                # only update if changed
-                if static_tab and static_tab['name'] != xblock.display_name:
-                    static_tab['name'] = xblock.display_name
-                    self.update_item(course, user_id)
 
             # recompute (and update) the metadata inheritance tree which is cached
             self.refresh_cached_metadata_inheritance_tree(xblock.scope_ids.usage_id.course_key, xblock.runtime)
@@ -946,7 +900,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
         return jsonfields
 
     # pylint: disable=unused-argument
-    def delete_item(self, location, **kwargs):
+    def delete_item(self, location, user_id, **kwargs):
         """
         Delete an item from this modulestore.
 
@@ -962,7 +916,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
             course = self._get_course_for_item(item.scope_ids.usage_id)
             existing_tabs = course.tabs or []
             course.tabs = [tab for tab in existing_tabs if tab.get('url_slug') != location.name]
-            self.update_item(course, '**replace_user**')
+            self.update_item(course, user_id)
 
         # Must include this to avoid the django debug toolbar (which defines the deprecated "safe=False")
         # from overriding our default value set in the init method.

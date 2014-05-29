@@ -198,7 +198,7 @@ class ContentStoreToyCourseTest(ModuleStoreTestCase):
         html_usage_key = course_key.make_usage_key('html', 'test_html')
 
         html_module_from_draft_store = draft_store.get_item(html_usage_key)
-        draft_store.convert_to_draft(html_module_from_draft_store.location)
+        draft_store.convert_to_draft(html_module_from_draft_store.location, 0)
 
         # Query get_items() and find the html item. This should just return back a single item (not 2).
 
@@ -233,7 +233,7 @@ class ContentStoreToyCourseTest(ModuleStoreTestCase):
         self.assertEqual(html_module.graceperiod, course.graceperiod)
         self.assertNotIn('graceperiod', own_metadata(html_module))
 
-        draft_store.convert_to_draft(html_module.location)
+        draft_store.convert_to_draft(html_module.location, 0)
 
         # refetch to check metadata
         html_module = draft_store.get_item(html_usage_key)
@@ -251,7 +251,7 @@ class ContentStoreToyCourseTest(ModuleStoreTestCase):
         self.assertNotIn('graceperiod', own_metadata(html_module))
 
         # put back in draft and change metadata and see if it's now marked as 'own_metadata'
-        draft_store.convert_to_draft(html_module.location)
+        draft_store.convert_to_draft(html_module.location, 0)
         html_module = draft_store.get_item(html_usage_key)
 
         new_graceperiod = timedelta(hours=1)
@@ -276,7 +276,7 @@ class ContentStoreToyCourseTest(ModuleStoreTestCase):
         draft_store.publish(html_module.location, 0)
 
         # and re-read and verify 'own-metadata'
-        draft_store.convert_to_draft(html_module.location)
+        draft_store.convert_to_draft(html_module.location, 0)
         html_module = draft_store.get_item(html_usage_key)
 
         self.assertIn('graceperiod', own_metadata(html_module))
@@ -296,7 +296,7 @@ class ContentStoreToyCourseTest(ModuleStoreTestCase):
         problem = modulestore('draft').get_item(problem_usage_key)
 
         # put into draft
-        modulestore('draft').convert_to_draft(problem.location)
+        modulestore().convert_to_draft(problem.location, 0)
 
         # make sure we can query that item and verify that it is a draft
         draft_problem = modulestore('draft').get_item(problem_usage_key)
@@ -650,9 +650,9 @@ class ContentStoreToyCourseTest(ModuleStoreTestCase):
             depth=1
         )
 
-        draft_store.convert_to_draft(vertical.location)
+        draft_store.convert_to_draft(vertical.location, 0)
         for child in vertical.get_children():
-            draft_store.convert_to_draft(child.location)
+            draft_store.convert_to_draft(child.location, 0)
 
         items = module_store.get_items(source_course_id, revision='draft')
         self.assertGreater(len(items), 0)
@@ -749,7 +749,7 @@ class ContentStoreToyCourseTest(ModuleStoreTestCase):
         newobject = draft_store.create_and_save_xmodule(location)
         self.assertFalse(getattr(newobject, 'is_draft', False))
         with self.assertRaises(InvalidVersionError):
-            draft_store.convert_to_draft(location)
+            draft_store.convert_to_draft(location, 0)
         chapter = draft_store.get_item(location)
         chapter.data = 'chapter data'
 
@@ -758,7 +758,7 @@ class ContentStoreToyCourseTest(ModuleStoreTestCase):
         self.assertFalse(getattr(newobject, 'is_draft', False))
 
         with self.assertRaises(InvalidVersionError):
-            draft_store.unpublish(location)
+            draft_store.unpublish(location, 0)
 
     def test_bad_contentstore_request(self):
         resp = self.client.get_html('http://localhost:8001/c4x/CDX/123123/asset/&images_circuits_Lab7Solution2.png')
@@ -799,9 +799,9 @@ class ContentStoreToyCourseTest(ModuleStoreTestCase):
         # get a vertical (and components in it) to put into 'draft'
         vertical = module_store.get_item(course_id.make_usage_key('vertical', 'vertical_test'), depth=1)
 
-        draft_store.convert_to_draft(vertical.location)
+        draft_store.convert_to_draft(vertical.location, 0)
         for child in vertical.get_children():
-            draft_store.convert_to_draft(child.location)
+            draft_store.convert_to_draft(child.location, 0)
 
         # delete the course
         delete_course(module_store, content_store, course_id, commit=True)
@@ -853,9 +853,9 @@ class ContentStoreToyCourseTest(ModuleStoreTestCase):
         # get the original vertical (and components in it) to put into 'draft'
         vertical = module_store.get_item(course_id.make_usage_key('vertical', 'vertical_test'), depth=1)
         self.assertEqual(len(orphan_vertical.children), len(vertical.children))
-        draft_store.convert_to_draft(vertical.location)
+        draft_store.convert_to_draft(vertical.location, 0)
         for child in vertical.get_children():
-            draft_store.convert_to_draft(child.location)
+            draft_store.convert_to_draft(child.location, 0)
 
         root_dir = path(mkdtemp_clean())
 

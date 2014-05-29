@@ -11,7 +11,6 @@ from django.core.urlresolvers import reverse
 from xmodule.contentstore.content import StaticContent
 from xmodule.contentstore.django import contentstore
 from xmodule.modulestore.django import modulestore
-from xmodule.modulestore.exceptions import ItemNotFoundError
 from opaque_keys.edx.locations import SlashSeparatedCourseKey, Location
 from xmodule.modulestore.store_utilities import delete_course
 from student.roles import CourseInstructorRole, CourseStaffRole
@@ -30,10 +29,8 @@ def delete_course_and_groups(course_id, commit=False):
     This deletes the courseware associated with a course_id as well as cleaning update_item
     the various user table stuff (groups, permissions, etc.)
     """
-    module_store = modulestore('direct')
+    module_store = modulestore()
     content_store = contentstore()
-
-    module_store.ignore_write_events_on_courses.add(course_id)
 
     if delete_course(module_store, content_store, course_id, commit):
 
@@ -124,17 +121,6 @@ def course_image_url(course):
     return path
 
 
-class PublishState(object):
-    """
-    The publish state for a given xblock-- either 'draft', 'private', or 'public'.
-
-    Currently in CMS, an xblock can only be in 'draft' or 'private' if it is at or below the Unit level.
-    """
-    draft = 'draft'
-    private = 'private'
-    public = 'public'
-
-
 def compute_publish_state(xblock):
     """
     Returns whether this xblock is 'draft', 'public', or 'private'.
@@ -145,14 +131,7 @@ def compute_publish_state(xblock):
     'private' content is editable and not visible in the LMS
     """
 
-    if getattr(xblock, 'is_draft', False):
-        try:
-            modulestore('direct').get_item(xblock.location)
-            return PublishState.draft
-        except ItemNotFoundError:
-            return PublishState.private
-    else:
-        return PublishState.public
+    return modulestore().compute_publish_state(xblock)
 
 
 def add_extra_panel_tab(tab_type, course):

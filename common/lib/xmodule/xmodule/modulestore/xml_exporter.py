@@ -47,7 +47,7 @@ class EdxJSONEncoder(json.JSONEncoder):
             return super(EdxJSONEncoder, self).default(obj)
 
 
-def export_to_xml(modulestore, contentstore, course_key, root_dir, course_dir, draft_modulestore=None):
+def export_to_xml(modulestore, contentstore, course_key, root_dir, course_dir):
     """
     Export all modules from `modulestore` and content from `contentstore` as xml to `root_dir`.
 
@@ -56,8 +56,6 @@ def export_to_xml(modulestore, contentstore, course_key, root_dir, course_dir, d
     `course_key`: The `CourseKey` of the `CourseModuleDescriptor` to export
     `root_dir`: The directory to write the exported xml to
     `course_dir`: The name of the directory inside `root_dir` to write the course content to
-    `draft_modulestore`: An optional `DraftModuleStore` that contains draft content, which will be exported
-        alongside the public content in the course.
     """
 
     course = modulestore.get_course(course_key)
@@ -123,24 +121,27 @@ def export_to_xml(modulestore, contentstore, course_key, root_dir, course_dir, d
 
     # export draft content
     # NOTE: this code assumes that verticals are the top most draftable container
-    # should we change the application, then this assumption will no longer
-    # be valid
-    if draft_modulestore is not None:
-        draft_verticals = draft_modulestore.get_items(course_key, category='vertical', revision='draft')
-        if len(draft_verticals) > 0:
-            draft_course_dir = export_fs.makeopendir(DRAFT_DIR)
-            for draft_vertical in draft_verticals:
-                parent_locs = draft_modulestore.get_parent_locations(draft_vertical.location)
-                # Don't try to export orphaned items.
-                if len(parent_locs) > 0:
-                    logging.debug('parent_locs = {0}'.format(parent_locs))
-                    draft_vertical.xml_attributes['parent_sequential_url'] = parent_locs[0].to_deprecated_string()
-                    sequential = modulestore.get_item(parent_locs[0])
-                    index = sequential.children.index(draft_vertical.location)
-                    draft_vertical.xml_attributes['index_in_children_list'] = str(index)
-                    draft_vertical.runtime.export_fs = draft_course_dir
-                    node = lxml.etree.Element('unknown')
-                    draft_vertical.add_xml_to_node(node)
+    # should we change the application, then this assumption will no longer be valid
+    # NOTE: we need to explicitly implement the logic for setting the vertical's parent
+    # and index here since the XML modulestore cannot load draft modules
+    draft_verticals = [
+        item for item in modulestore.get_items(course_key, category='vertical')
+        if getattr(item, 'is_draft', False)
+    ]
+    if len(draft_verticals) > 0:
+        draft_course_dir = export_fs.makeopendir(DRAFT_DIR)
+        for draft_vertical in draft_verticals:
+            parent_locs = modulestore.get_parent_locations(draft_vertical.location)
+            # Don't try to export orphaned items.
+            if len(parent_locs) > 0:
+                logging.debug('parent_locs = {0}'.format(parent_locs))
+                draft_vertical.xml_attributes['parent_sequential_url'] = parent_locs[0].to_deprecated_string()
+                sequential = modulestore.get_item(parent_locs[0])
+                index = sequential.children.index(draft_vertical.location)
+                draft_vertical.xml_attributes['index_in_children_list'] = str(index)
+                draft_vertical.runtime.export_fs = draft_course_dir
+                node = lxml.etree.Element('unknown')
+                draft_vertical.add_xml_to_node(node)
 
 
 def _export_field_content(xblock_item, item_dir):

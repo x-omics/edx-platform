@@ -72,6 +72,7 @@ from xblock.core import XBlock
 from xmodule.modulestore.loc_mapper_store import LocMapperStore
 from xmodule.error_module import ErrorDescriptor
 
+
 log = logging.getLogger(__name__)
 #==============================================================================
 # Documentation is at
@@ -1274,6 +1275,10 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
         self.db_connection.insert_structure(destination_structure)
         self._update_head(index_entry, destination_course.branch, destination_structure['_id'])
 
+    def unpublish(self, location, user_id):
+        published_location = location.replace(branch='published')
+        self.delete_item(published_location, user_id)
+
     def update_course_index(self, updated_index_entry):
         """
         Change the given course's index entry.
@@ -1769,3 +1774,24 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
         """
         courses = []
         return courses
+
+    def compute_publish_state(self, xblock):
+        """
+        Returns whether this xblock is 'draft', 'public', or 'private'.
+
+        'draft' content is in the process of being edited, but still has a previous
+            version visible in the LMS
+        'public' content is locked and visible in the LMS
+        'private' content is editable and not visible in the LMS
+        """
+        # TODO implement
+        raise NotImplementedError()
+
+    def convert_to_draft(self, location, user_id):
+        """
+        Create a copy of the source and mark its revision as draft.
+
+        :param source: the location of the source (its revision must be None)
+        """
+        # This is a no-op in Split since a draft version of the data always remains
+        pass
