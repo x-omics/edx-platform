@@ -70,6 +70,18 @@ class DraftModuleStore(MongoModuleStore):
         else:
             return super(DraftModuleStore, self).get_item(usage_key, depth=depth)
 
+    def get_parent_locations(self, location, revision=None):
+        '''
+        Find all locations that are the parents of this location in this
+        course.  Needed for path_to_location().
+
+        Returns w/ revision set. If a block has both a draft a non-draft parent, it returns both
+        unless revision is set or the thread's branch is set to 'published'.
+        '''
+        if BranchSetting.is_published():
+            revision = 'published'
+        return super(DraftModuleStore, self).get_parent_locations(location, revision)
+
     def create_xmodule(self, location, definition_data=None, metadata=None, system=None, fields={}):
         """
         Create the new xmodule but don't save it. Returns the new module with a draft locator if
@@ -193,10 +205,10 @@ class DraftModuleStore(MongoModuleStore):
         # don't allow locations to truly represent themselves as draft outside of this file
         xblock.location = as_published(xblock.location)
 
-    def delete_item(self, location, user_id, revision=None, **kwargs):
+    def delete_item(self, location, user_id, **kwargs):
         """
         Delete an item from this modulestore.
-        That method determines which revisions to delete. It disconnects and deletes the subtree.
+        The method determines which revisions to delete. It disconnects and deletes the subtree.
         * Deleting a DIRECT_ONLY block, deletes both draft and published children and removes from parent.
         * Deleting a specific version of block whose parent is DIRECT_ONLY, only removes it from parent if
         the other version of block does not exist. deletes only children of same version.
@@ -220,11 +232,10 @@ class DraftModuleStore(MongoModuleStore):
             self.update_item(course, '**replace_user**')
 
         direct_only_root = location.category in DIRECT_ONLY_CATEGORIES
-        if revision is None:
-            if location.revision is None:
-                revision = 'published'
-            else:
-                revision = DRAFT
+        if location.revision is None:
+            revision = 'published'
+        else:
+            revision = DRAFT
 
         # remove subtree from its parent
         parents = self.get_parent_locations(location, revision=revision)

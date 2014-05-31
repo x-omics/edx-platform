@@ -101,11 +101,18 @@ class TestMongoModuleStore(unittest.TestCase):
         # Also test draft store imports
         #
         draft_store = DraftModuleStore(doc_store_config, FS_ROOT, RENDER_TEMPLATE, default_class=DEFAULT_CLASS)
-        import_from_xml(store, DATA_DIR, TestMongoModuleStore.courses, draft_store=draft_store, static_content_store=content_store)
+        import_from_xml(
+            store,
+            "**replace_user**",
+            DATA_DIR,
+            TestMongoModuleStore.courses,
+            static_content_store=content_store
+        )
 
         # also test a course with no importing of static content
         import_from_xml(
             store,
+            "**replace_user**",
             DATA_DIR,
             ['test_import_course'],
             static_content_store=content_store,

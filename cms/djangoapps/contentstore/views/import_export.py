@@ -218,6 +218,7 @@ def import_handler(request, course_key_string):
 
                     _module_store, course_items = import_from_xml(
                         modulestore(),
+                        request.user.id,
                         settings.GITHUB_REPO_ROOT,
                         [course_subdir],
                         load_error_modules=False,

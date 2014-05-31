@@ -123,7 +123,7 @@ def xblock_handler(request, usage_key_string):
                 return HttpResponse(status=406)
 
         elif request.method == 'DELETE':
-            modulestore().delete_item(usage_key, request.user.id, revision=DRAFT)
+            modulestore().delete_item(usage_key.replace(revision=DRAFT), request.user.id)
             return JsonResponse()
         else:  # Since we have a usage_key, we are updating an existing xblock.
             return _save_item(
