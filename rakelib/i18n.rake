@@ -10,7 +10,7 @@ namespace :i18n do
 
   desc "Extract localizable strings from sources"
   task :extract => ["i18n:validate:gettext", "assets:coffee"] do
-    command = File.join(REPO_ROOT, "i18n", "extract.py")
+    command = "i18n_tool extract"
     if verbose == true
       command += " -vv"
     end
@@ -19,19 +19,19 @@ namespace :i18n do
 
   desc "Compile localizable strings from sources, extracting strings first."
   task :generate => "i18n:extract" do
-    cmd = File.join(REPO_ROOT, "i18n", "generate.py")
+    cmd = "i18n_tool generate"
     sh("#{cmd}")
   end
 
   desc "Compile localizable strings from sources, extracting strings first, and complain if files are missing."
   task :generate_strict => "i18n:extract" do
-    cmd = File.join(REPO_ROOT, "i18n", "generate.py")
+    cmd = "i18n_tool generate"
     sh("#{cmd} --strict")
   end
 
   desc "Simulate international translation by generating dummy strings corresponding to source strings."
   task :dummy => "i18n:extract" do
-    sh(File.join(REPO_ROOT, "i18n", "dummy.py"))
+    sh("i18n_tool dummy")
   end
 
   namespace :validate do
@@ -62,13 +62,13 @@ namespace :i18n do
   namespace :transifex do
     desc "Push source strings to Transifex for translation"
     task :push => "i18n:validate:transifex_config" do
-      cmd = File.join(REPO_ROOT, "i18n", "transifex.py")
+      cmd = "i18n_tool transifex"
       sh("#{cmd} push")
     end
 
     desc "Pull translated strings from Transifex"
     task :pull => "i18n:validate:transifex_config" do
-      cmd = File.join(REPO_ROOT, "i18n", "transifex.py")
+      cmd = "i18n_tool transifex"
       sh("#{cmd} pull")
     end
   end
