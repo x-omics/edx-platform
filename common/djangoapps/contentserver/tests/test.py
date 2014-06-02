@@ -36,16 +36,12 @@ class ContentStoreToyCourseTest(ModuleStoreTestCase):
         """
         Create user and login.
         """
-
-        settings.MODULESTORE['default']['OPTIONS']['fs_root'] = path('common/test/data')
-        settings.MODULESTORE['direct']['OPTIONS']['fs_root'] = path('common/test/data')
-
         self.client = Client()
         self.contentstore = contentstore()
 
         self.course_key = SlashSeparatedCourseKey('edX', 'toy', '2012_Fall')
 
-        import_from_xml(modulestore('direct'), 'common/test/data/', ['toy'],
+        import_from_xml(modulestore(), '**replace_user**', 'common/test/data/', ['toy'],
                 static_content_store=self.contentstore, verbose=True)
 
         # A locked asset

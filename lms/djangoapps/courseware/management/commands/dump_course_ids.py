@@ -24,11 +24,13 @@ class Command(BaseCommand):
     )
 
     def handle(self, *args, **options):
-        try:
-            name = options['modulestore']
-            store = modulestore(name)
-        except KeyError:
-            raise CommandError("Unknown modulestore {}".format(name))
+        # NAATODO - should we allow callers to specify the store name at all?
+        # try:
+        #     name = options['modulestore']
+        #     store = modulestore(name)
+        # except KeyError:
+        #     raise CommandError("Unknown modulestore {}".format(name))
+        store = modulestore()
 
         output = u'\n'.join(course.id.to_deprecated_string() for course in store.get_courses()) + '\n'
 

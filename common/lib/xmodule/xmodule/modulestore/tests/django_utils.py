@@ -40,7 +40,6 @@ def mixed_store_config(data_dir, mappings):
             }
         }
     }
-    store['direct'] = store['default']
     return store
 
 

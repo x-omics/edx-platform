@@ -110,6 +110,9 @@ STATICFILES_DIRS += [
 
 update_module_store_settings(
     MODULESTORE,
+    module_store_options={
+        'fs_root': TEST_ROOT / "data",
+    },
     xml_store_options={
         'data_dir': COMMON_TEST_DATA_ROOT,
     }

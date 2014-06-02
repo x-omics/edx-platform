@@ -333,6 +333,7 @@ class DraftModuleStore(MongoModuleStore):
             self.collection.remove({'_id': as_draft(root_location).to_deprecated_son()})
 
         _internal_depth_first(location)
+        return self.get_item(as_published(location))
 
     def unpublish(self, location, user_id):
         """

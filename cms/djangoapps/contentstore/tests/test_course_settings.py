@@ -470,7 +470,7 @@ class CourseMetadataEditingTest(CourseTestCase):
          )
         self.update_check(test_model)
         # try fresh fetch to ensure persistence
-        fresh = modulestore('direct').get_course(self.course.id)
+        fresh = modulestore().get_course(self.course.id)
         test_model = CourseMetadata.fetch(fresh)
         self.update_check(test_model)
         # now change some of the existing metadata

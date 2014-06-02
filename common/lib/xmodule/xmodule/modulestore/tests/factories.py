@@ -5,6 +5,7 @@ from uuid import uuid4
 from xmodule.modulestore import prefer_xmodules
 from opaque_keys.edx.locations import Location
 from xblock.core import XBlock
+from xmodule.tabs import StaticTab
 
 
 class Dummy(object):
@@ -174,5 +175,18 @@ class ItemFactory(XModuleFactory):
         if 'detached' not in module._class_tags:
             parent.children.append(location)
             store.update_item(parent, '**replace_user**')
+
+        # VS[compat] cdodge: This is a hack because static_tabs also have references from the course module, so
+        # if we add one then we need to also add it to the policy information (i.e. metadata)
+        # we should remove this once we can break this reference from the course to static tabs
+        if category == 'static_tab':
+            course = store.get_course(location.course_key)
+            course.tabs.append(
+                StaticTab(
+                    name=display_name,
+                    url_slug=location.name,
+                )
+            )
+            store.update_item(course, '**replace_user**')
 
         return store.get_item(location)

@@ -30,11 +30,15 @@ class BranchSetting(object):
 
     @classmethod
     def set_draft(cls):
-        cls.thread_branch = 'draft'
+        cls.local_thread_branch.branch_value = 'draft'
 
     @classmethod
     def set_published(cls):
-        cls.thread_branch = 'published'
+        cls.local_thread_branch.branch_value = 'published'
+
+    @classmethod
+    def reset(cls):
+        cls.local_thread_branch.branch_value = None
 
     @classmethod
     def is_draft(cls):

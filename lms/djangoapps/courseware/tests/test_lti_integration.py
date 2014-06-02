@@ -182,7 +182,7 @@ class TestLTIModuleListing(ModuleStoreTestCase):
             self.assertEqual(404, response.status_code)
 
     def test_lti_rest_listing(self):
-        """tests that the draft lti module is not a part of the endpoint response, but the published one is"""
+        """tests that the draft lti module is part of the endpoint response"""
         request = mock.Mock()
         request.method = 'GET'
         response = get_course_lti_endpoints(request, self.course.id.to_deprecated_string())
@@ -194,7 +194,7 @@ class TestLTIModuleListing(ModuleStoreTestCase):
             "lti_1_1_result_service_xml_endpoint": self.expected_handler_url('grade_handler'),
             "lti_2_0_result_service_json_endpoint":
             self.expected_handler_url('lti_2_0_result_rest_handler') + "/user/{anon_user_id}",
-            "display_name": self.lti_published.display_name
+            "display_name": self.lti_draft.display_name
         }
         self.assertEqual([expected], json.loads(response.content))
 
