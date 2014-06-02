@@ -34,11 +34,11 @@ def i_created_annotation_problem(step, advanced_module):
     world.wait_for_xmodule()
 
 
-@step('I have created a "(.*)" problem with advanced component "(.*)" of category "(.*)"')
-def i_create_new_advanced_problem(step, component_type, advanced_component, category):
+@step('I have created an advanced component "(.*)" of type "(.*)"')
+def i_create_new_advanced_problem(step, component_type, advanced_component):
     world.create_component_instance(
         step=step,
-        category=category,
+        category='advanced',
         component_type=component_type,
         advanced_component=advanced_component
     )
