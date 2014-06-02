@@ -57,30 +57,28 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
             BAD_COURSE_ID: 'xml',
             MONGO_COURSEID: 'default',
         },
-        'stores': {
-            'xml': {
-                'ENGINE': 'xmodule.modulestore.xml.XMLModuleStore',
-                'OPTIONS': {
-                    'data_dir': DATA_DIR,
-                    'default_class': 'xmodule.hidden_module.HiddenDescriptor',
-                }
-            },
-            'direct': {
+        'stores': [
+            {
+                'NAME': 'draft',
                 'ENGINE': 'xmodule.modulestore.mongo.MongoModuleStore',
                 'DOC_STORE_CONFIG': DOC_STORE_CONFIG,
                 'OPTIONS': modulestore_options
             },
-            'draft': {
-                'ENGINE': 'xmodule.modulestore.mongo.MongoModuleStore',
-                'DOC_STORE_CONFIG': DOC_STORE_CONFIG,
-                'OPTIONS': modulestore_options
-            },
-            'split': {
+            {
+                'NAME': 'split',
                 'ENGINE': 'xmodule.modulestore.split_mongo.SplitMongoModuleStore',
                 'DOC_STORE_CONFIG': DOC_STORE_CONFIG,
                 'OPTIONS': modulestore_options
-            }
-        }
+            },
+           {
+               'NAME': 'xml',
+               'ENGINE': 'xmodule.modulestore.xml.XMLModuleStore',
+               'OPTIONS': {
+                   'data_dir': DATA_DIR,
+                   'default_class': 'xmodule.hidden_module.HiddenDescriptor',
+               }
+           },
+        ]
     }
 
     def _compareIgnoreVersion(self, loc1, loc2, msg=None):
@@ -127,7 +125,7 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
             offering = course_key.offering.replace('/', '.')
         else:
             offering = course_key.offering
-        course = self.store.create_course(course_key.org, offering, store_name=default)
+        course = self.store.create_course(course_key.org, offering)
         category = self.import_chapter_location.category
         block_id = self.import_chapter_location.name
         chapter = self.store.create_item(
@@ -152,7 +150,12 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
         Initialize the database and create one test course in it
         """
         # set the default modulestore
-        self.options['stores']['default'] = self.options['stores'][default]
+        store_configs = self.options['stores']
+        for index in range(len(store_configs)):
+            if store_configs[index]['NAME'] == default:
+                if index > 0:
+                    store_configs[index], store_configs[0] = store_configs[0], store_configs[index]
+                break
         self.store = MixedModuleStore(**self.options)
         self.addCleanup(self.store.close_all_connections)
 
@@ -179,7 +182,7 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
 
         self._create_course(default, self.course_locations[self.MONGO_COURSEID].course_key)
 
-    @ddt.data('direct', 'split')
+    @ddt.data('draft', 'split')
     def test_get_modulestore_type(self, default_ms):
         """
         Make sure we get back the store type we expect for given mappings
@@ -191,7 +194,7 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
         self.assertEqual(self.store.get_modulestore_type(
             self._course_key_from_string(self.XML_COURSEID2)), XML_MODULESTORE_TYPE
         )
-        mongo_ms_type = MONGO_MODULESTORE_TYPE if default_ms == 'direct' else SPLIT_MONGO_MODULESTORE_TYPE
+        mongo_ms_type = MONGO_MODULESTORE_TYPE if default_ms == 'draft' else SPLIT_MONGO_MODULESTORE_TYPE
         self.assertEqual(self.store.get_modulestore_type(
             self._course_key_from_string(self.MONGO_COURSEID)), mongo_ms_type
         )
@@ -200,7 +203,7 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
             SlashSeparatedCourseKey('foo', 'bar', '2012_Fall')), mongo_ms_type
         )
 
-    @ddt.data('direct', 'split')
+    @ddt.data('draft', 'split')
     def test_has_item(self, default_ms):
         self.initdb(default_ms)
         for course_locn in self.course_locations.itervalues():  # pylint: disable=maybe-no-member
@@ -212,7 +215,7 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
         ))
         self.assertFalse(self.store.has_item(self.fake_location))
 
-    @ddt.data('direct', 'split')
+    @ddt.data('draft', 'split')
     def test_get_item(self, default_ms):
         self.initdb(default_ms)
         for course_locn in self.course_locations.itervalues():  # pylint: disable=maybe-no-member
@@ -226,7 +229,7 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
         with self.assertRaises(ItemNotFoundError):
             self.store.get_item(self.fake_location)
 
-    @ddt.data('direct', 'split')
+    @ddt.data('draft', 'split')
     def test_get_items(self, default_ms):
         self.initdb(default_ms)
         for course_locn in self.course_locations.itervalues():  # pylint: disable=maybe-no-member
@@ -236,7 +239,7 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
             self.assertEqual(len(modules), 1)
             self.assertEqual(modules[0].location, course_locn)
 
-    @ddt.data('direct', 'split')
+    @ddt.data('draft', 'split')
     def test_update_item(self, default_ms):
         """
         Update should fail for r/o dbs and succeed for r/w ones
@@ -264,14 +267,14 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
         """
         self.initdb(default_ms)
         # r/o try deleting the course (is here to ensure it can't be deleted)
-        with self.assertRaises(AttributeError):
+        with self.assertRaises(NotImplementedError):
             self.store.delete_item(self.xml_chapter_location, '**replace_user**')
         self.store.delete_item(self.import_chapter_location, '**replace_user**')
         # verify it's gone
         with self.assertRaises(ItemNotFoundError):
             self.store.get_item(self.import_chapter_location)
 
-    @ddt.data('direct', 'split')
+    @ddt.data('draft', 'split')
     def test_get_courses(self, default_ms):
         self.initdb(default_ms)
         # we should have 3 total courses across all stores
@@ -290,7 +293,7 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
         """
         Test that the xml modulestore only loaded the courses from the maps.
         """
-        self.initdb('direct')
+        self.initdb('draft')
         courses = self.store.modulestores['xml'].get_courses()
         self.assertEqual(len(courses), 2)
         course_ids = [course.id for course in courses]
@@ -303,11 +306,11 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
         """
         Test that the xml modulestore doesn't allow write ops.
         """
-        self.initdb('direct')
+        self.initdb('draft')
         with self.assertRaises(NotImplementedError):
             self.store.create_course("org", "course/run", store_name='xml')
 
-    @ddt.data('direct', 'split')
+    @ddt.data('draft', 'split')
     def test_get_course(self, default_ms):
         self.initdb(default_ms)
         for course_location in self.course_locations.itervalues():  # pylint: disable=maybe-no-member
@@ -316,7 +319,7 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
             self.assertIsNotNone(course)
             self.assertEqual(course.id, course_location.course_key)
 
-    @ddt.data('direct', 'split')
+    @ddt.data('draft', 'split')
     def test_get_parent_locations(self, default_ms):
         self.initdb(default_ms)
         parents = self.store.get_parent_locations(self.import_chapter_location)
@@ -327,7 +330,7 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
         self.assertEqual(len(parents), 1)
         self.assertEqual(parents[0], self.course_locations[self.XML_COURSEID1])
 
-    @ddt.data('direct', 'split')
+    @ddt.data('draft', 'split')
     def test_get_orphans(self, default_ms):
         self.initdb(default_ms)
         # create an orphan
@@ -339,7 +342,7 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
         else:
             self.assertEqual(found_orphans, [orphan.location.to_deprecated_string()])
 
-    @ddt.data('direct')
+    @ddt.data('draft')
     def test_create_item_from_parent_location(self, default_ms):
         """
         Test a code path missed by the above: passing an old-style location as parent but no
@@ -350,7 +353,7 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
         orphans = self.store.get_orphans(self.course_locations[self.MONGO_COURSEID].course_key)
         self.assertEqual(len(orphans), 0, "unexpected orphans: {}".format(orphans))
 
-    @ddt.data('direct')
+    @ddt.data('draft')
     def test_get_courses_for_wiki(self, default_ms):
         """
         Test the get_courses_for_wiki method

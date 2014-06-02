@@ -143,14 +143,11 @@ class MixedModuleStore(ModuleStoreWriteBase):
                     if has_locators and isinstance(course.id, SlashSeparatedCourseKey):
                         # see if a locator version of course is in the result
                         try:
-                            # if there's no existing mapping, then the course can't have been in split
-                            course_locator = loc_mapper().translate_location_to_course_locator(
-                                course.id,
-                                add_entry_if_missing=False
-                            )
+                            course_locator = loc_mapper().translate_location_to_course_locator(course.id)
                             if course_locator in courses:
                                 continue
                         except ItemNotFoundError:
+                            # if there's no existing mapping, then the course can't have been in split
                             pass
                     courses[course.id] = course
 
@@ -236,7 +233,6 @@ class MixedModuleStore(ModuleStoreWriteBase):
             offering (str): the name of the course offering
             user_id: id of the user creating the course
             fields (dict): Fields to set on the course at initialization
-            store_name (str): the name of the modulestore that we will create this course within
             kwargs: Any optional arguments understood by a subset of modulestores to customize instantiation
 
         Returns: a CourseDescriptor
@@ -244,7 +240,7 @@ class MixedModuleStore(ModuleStoreWriteBase):
         store = self._get_modulestore_for_courseid(None)
 
         if not hasattr(store, 'create_course'):
-            raise NotImplementedError(u"Cannot create a course on store %s" % store['NAME'])
+            raise NotImplementedError(u"Cannot create a course on store {}".format(store))
 
         return store.create_course(org, offering, user_id, fields, **kwargs)
 
