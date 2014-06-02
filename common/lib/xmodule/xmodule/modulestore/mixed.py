@@ -193,7 +193,10 @@ class MixedModuleStore(ModuleStoreWriteBase):
         """
         assert(isinstance(course_key, CourseKey))
         store = self._get_modulestore_for_courseid(course_key)
-        return store.delete_course(course_key, user_id)
+        if hasattr(store, 'delete_course'):
+            return store.delete_course(course_key, user_id)
+        else:
+            raise NotImplementedError(u"Cannot delete a course on store {}".format(store))
 
     def get_parent_locations(self, location):
         """
@@ -302,7 +305,10 @@ class MixedModuleStore(ModuleStoreWriteBase):
         """
         course_id = xblock.scope_ids.usage_id.course_key
         store = self._get_modulestore_for_courseid(course_id)
-        return store.update_item(xblock, user_id, allow_not_found)
+        if hasattr(store, 'update_item'):
+            return store.update_item(xblock, user_id, allow_not_found)
+        else:
+            raise NotImplementedError(u"Cannot update item on store {}".format(store))
 
     def delete_item(self, location, user_id=None, **kwargs):
         """
@@ -310,7 +316,10 @@ class MixedModuleStore(ModuleStoreWriteBase):
         """
         course_id = location.course_key
         store = self._get_modulestore_for_courseid(course_id)
-        return store.delete_item(location, user_id=user_id, **kwargs)
+        if hasattr(store, 'delete_item'):
+            return store.delete_item(location, user_id=user_id, **kwargs)
+        else:
+            raise NotImplementedError(u"Cannot delete item on store {}".format(store))
 
     def close_all_connections(self):
         """
@@ -328,7 +337,10 @@ class MixedModuleStore(ModuleStoreWriteBase):
         """
         course_id = location.course_key
         store = self._get_modulestore_for_courseid(course_id)
-        return store.create_xmodule(location, definition_data, metadata, system, fields)
+        if hasattr(store, 'create_xmodule'):
+            return store.create_xmodule(location, definition_data, metadata, system, fields)
+        else:
+            raise NotImplementedError(u"Cannot create_xmodule on store {}".format(store))
 
     def create_and_save_xmodule(self, location, user_id, definition_data=None, metadata=None, system=None, fields={}):
         """
@@ -342,6 +354,7 @@ class MixedModuleStore(ModuleStoreWriteBase):
         :param metadata: can be empty, the initial metadata for the kvs
         :param system: if you already have an xblock from the course, the xblock.runtime value
         """
+        # let create_xmodule do the is implemented check
         new_object = self.create_xmodule(location, definition_data, metadata, system, fields)
         self.update_item(new_object, user_id, allow_not_found=True)
         return new_object
@@ -368,7 +381,13 @@ class MixedModuleStore(ModuleStoreWriteBase):
         """
         course_id = xblock.scope_ids.usage_id.course_key
         store = self._get_modulestore_for_courseid(course_id)
-        return store.compute_publish_state(xblock)
+        if hasattr(store, 'compute_publish_state'):
+            return store.compute_publish_state(xblock)
+        elif hasattr(store, 'publish'):
+            raise NotImplementedError(u"Cannot compute_publish_state on store {}".format(store))
+        else:
+            # read-only store; so, everything's public
+            return 'public'
 
     def publish(self, location, user_id):
         """
@@ -376,7 +395,10 @@ class MixedModuleStore(ModuleStoreWriteBase):
         """
         course_id = location.course_key
         store = self._get_modulestore_for_courseid(course_id)
-        return store.publish(location, user_id)
+        if hasattr(store, 'publish'):
+            return store.publish(location, user_id)
+        else:
+            raise NotImplementedError(u"Cannot publish on store {}".format(store))
 
     def unpublish(self, location, user_id):
         """
@@ -384,7 +406,10 @@ class MixedModuleStore(ModuleStoreWriteBase):
         """
         course_id = location.course_key
         store = self._get_modulestore_for_courseid(course_id)
-        return store.unpublish(location, user_id)
+        if hasattr(store, 'unpublish'):
+            return store.unpublish(location, user_id)
+        else:
+            raise NotImplementedError(u"Cannot unpublish on store {}".format(store))
 
     def convert_to_draft(self, location, user_id):
         """
@@ -394,4 +419,7 @@ class MixedModuleStore(ModuleStoreWriteBase):
         """
         course_id = location.course_key
         store = self._get_modulestore_for_courseid(course_id)
-        return store.convert_to_draft(location, user_id)
+        if hasattr(store, 'convert_to_draft'):
+            return store.convert_to_draft(location, user_id)
+        else:
+            raise NotImplementedError(u"Cannot convert_to_draft on store {}".format(store))
