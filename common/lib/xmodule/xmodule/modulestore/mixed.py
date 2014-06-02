@@ -64,6 +64,10 @@ class MixedModuleStore(ModuleStoreWriteBase):
             )
             if key == 'split':
                 store.loc_mapper = loc_mapper()
+            # replace all named pointers to the store into actual pointers
+            for course_key, store_name in self.mappings.iteritems():
+                if store_name == key:
+                    self.mappings[course_key] = store
             self.modulestores.append(store)
 
     def _get_modulestore_for_courseid(self, course_id=None):
@@ -75,9 +79,12 @@ class MixedModuleStore(ModuleStoreWriteBase):
         """
         if course_id is not None:
             mapping = self.mappings.get(course_id, None)
-            if mapping is None:
+            if mapping is not None:
+                return mapping
+            else:
                 for store in self.modulestores:
                     if store.has_course(course_id):
+                        self.mappings[course_id] = store
                         return store
 
         # return the first store, as the default

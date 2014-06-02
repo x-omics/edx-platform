@@ -55,7 +55,6 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
             XML_COURSEID1: 'xml',
             XML_COURSEID2: 'xml',
             BAD_COURSE_ID: 'xml',
-            MONGO_COURSEID: 'default',
         },
         'stores': [
             {
