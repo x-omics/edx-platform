@@ -189,7 +189,7 @@ def reset_databases(scenario):
     mongo.drop_database(settings.CONTENTSTORE['DOC_STORE_CONFIG']['db'])
     _CONTENTSTORE.clear()
 
-    modulestore = xmodule.modulestore.django.editable_modulestore()
+    modulestore = xmodule.modulestore.django.modulestore()
     modulestore.collection.drop()
     xmodule.modulestore.django.clear_existing_modulestores()
 

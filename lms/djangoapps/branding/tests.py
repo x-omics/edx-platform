@@ -10,7 +10,7 @@ from django.test.utils import override_settings
 from django.test.client import RequestFactory
 
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
-from xmodule.modulestore.django import editable_modulestore
+from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.tests.factories import CourseFactory
 from courseware.tests.tests import TEST_DATA_MONGO_MODULESTORE
 import student.views
@@ -28,7 +28,7 @@ class AnonymousIndexPageTest(ModuleStoreTestCase):
     Tests that anonymous users can access the '/' page,  Need courses with start date
     """
     def setUp(self):
-        self.store = editable_modulestore()
+        self.store = modulestore()
         self.factory = RequestFactory()
         self.course = CourseFactory.create()
         self.course.days_early_for_beta = 5

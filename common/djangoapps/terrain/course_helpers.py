@@ -5,7 +5,7 @@ import urllib
 from lettuce import world
 from django.contrib.auth.models import User, Group
 from student.models import CourseEnrollment
-from xmodule.modulestore.django import editable_modulestore
+from xmodule.modulestore.django import modulestore
 from xmodule.contentstore.django import contentstore
 
 
@@ -71,5 +71,8 @@ def clear_courses():
     # (though it shouldn't), do this manually
     # from the bash shell to drop it:
     # $ mongo test_xmodule --eval "db.dropDatabase()"
-    editable_modulestore().collection.drop()
+    # NAATODO - Is this correct?
+    store = modulestore()
+    for course in store.get_courses():
+        store.delete_course(course.id)
     contentstore().fs_files.drop()

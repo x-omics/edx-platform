@@ -2,9 +2,10 @@
 Modulestore configuration for test cases.
 """
 
+from uuid import uuid4
 from django.test import TestCase
 from xmodule.modulestore.django import (
-    editable_modulestore, clear_existing_modulestores, loc_mapper)
+    modulestore, clear_existing_modulestores, loc_mapper)
 from xmodule.contentstore.django import contentstore
 
 
@@ -24,7 +25,7 @@ def mixed_store_config(data_dir, mappings):
     where 'xml' and 'default' are the two options provided by this configuration,
     mapping (respectively) to XML-backed and Mongo-backed modulestores..
     """
-    mongo_config = mongo_store_config(data_dir)
+    draft_mongo_config = draft_mongo_store_config(data_dir)
     xml_config = xml_store_config(data_dir)
 
     store = {
@@ -32,39 +33,13 @@ def mixed_store_config(data_dir, mappings):
             'ENGINE': 'xmodule.modulestore.mixed.MixedModuleStore',
             'OPTIONS': {
                 'mappings': mappings,
-                'stores': {
-                    'default': mongo_config['default'],
-                    'xml': xml_config['default']
-                }
+                'stores': [
+                    draft_mongo_config['default'],
+                    xml_config['default']
+                ]
             }
         }
     }
-    store['direct'] = store['default']
-    return store
-
-
-def mongo_store_config(data_dir):
-    """
-    Defines default module store using MongoModuleStore.
-
-    Use of this config requires mongo to be running.
-    """
-    store = {
-        'default': {
-            'ENGINE': 'xmodule.modulestore.mongo.MongoModuleStore',
-            'DOC_STORE_CONFIG': {
-                'host': 'localhost',
-                'db': 'test_xmodule',
-                'collection': 'modulestore{0}'.format(uuid4().hex[:5]),
-            },
-            'OPTIONS': {
-                'default_class': 'xmodule.raw_module.RawDescriptor',
-                'fs_root': data_dir,
-                'render_template': 'edxmako.shortcuts.render_to_string'
-            }
-        }
-    }
-
     store['direct'] = store['default']
     return store
 
@@ -82,6 +57,7 @@ def draft_mongo_store_config(data_dir):
 
     store = {
         'default': {
+            'NAME': 'draft',
             'ENGINE': 'xmodule.modulestore.mongo.draft.DraftModuleStore',
             'DOC_STORE_CONFIG': {
                 'host': 'localhost',
@@ -92,7 +68,6 @@ def draft_mongo_store_config(data_dir):
         }
     }
 
-    store['direct'] = store['default']
     return store
 
 
@@ -102,6 +77,7 @@ def xml_store_config(data_dir):
     """
     store = {
         'default': {
+            'NAME': 'xml',
             'ENGINE': 'xmodule.modulestore.xml.XMLModuleStore',
             'OPTIONS': {
                 'data_dir': data_dir,
@@ -110,7 +86,6 @@ def xml_store_config(data_dir):
         }
     }
 
-    store['direct'] = store['default']
     return store
 
 
@@ -161,20 +136,20 @@ class ModuleStoreTestCase(TestCase):
         'course' is an instance of CourseDescriptor for which we want
         to update metadata.
         """
-        store = editable_modulestore()
+        store = modulestore()
         store.update_item(course, '**replace_user**')
         updated_course = store.get_course(course.id)
         return updated_course
 
     @staticmethod
-    def drop_mongo_collections(store_name='default'):
+    def drop_mongo_collections():
         """
         If using a Mongo-backed modulestore & contentstore, drop the collections.
         """
 
         # This will return the mongo-backed modulestore
         # even if we're using a mixed modulestore
-        store = editable_modulestore(store_name)
+        store = modulestore()
         if hasattr(store, 'collection'):
             connection = store.collection.database.connection
             store.collection.drop()

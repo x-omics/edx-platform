@@ -23,10 +23,8 @@ class XModuleFactory(Factory):
 
     @lazy_attribute
     def modulestore(self):
-        # Delayed import so that we only depend on django if the caller
-        # hasn't provided their own modulestore
-        from xmodule.modulestore.django import editable_modulestore
-        return editable_modulestore('direct')
+        from xmodule.modulestore.django import modulestore
+        return modulestore()
 
 
 class CourseFactory(XModuleFactory):
@@ -63,7 +61,7 @@ class CourseFactory(XModuleFactory):
         # Save the attributes we just set
         new_course.save()
         # Update the data in the mongo datastore
-        store.update_item(new_course)
+        store.update_item(new_course, '**replace_user**')
         return new_course
 
 
@@ -162,7 +160,7 @@ class ItemFactory(XModuleFactory):
         # replace the display name with an optional parameter passed in from the caller
         if display_name is not None:
             metadata['display_name'] = display_name
-        store.create_and_save_xmodule(location, metadata=metadata, definition_data=data)
+        store.create_and_save_xmodule(location, '**replace_user**', metadata=metadata, definition_data=data)
 
         module = store.get_item(location)
 
@@ -171,7 +169,7 @@ class ItemFactory(XModuleFactory):
         # Save the attributes we just set
         module.save()
 
-        store.update_item(module)
+        store.update_item(module, '**replace_user**')
 
         if 'detached' not in module._class_tags:
             parent.children.append(location)
