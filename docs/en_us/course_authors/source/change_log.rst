@@ -31,6 +31,8 @@ May, 2014
    * - 05/30/14
      - Update :ref:`Working with Video Components` to include recommendations to
        use .mp4 and .webm video formats for browser compatibility
+   * - 06/04/14
+     - Added :ref:`gradebook` to the :ref:`Grades` section.
    * - 05/27/14
      - Based on the new requirement to specify the complete location identifier
        of a problem to adjust student grades, revised the :ref:`Grades` section.
