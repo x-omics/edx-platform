@@ -59,7 +59,7 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
         'stores': [
             {
                 'NAME': 'draft',
-                'ENGINE': 'xmodule.modulestore.mongo.MongoModuleStore',
+                'ENGINE': 'xmodule.modulestore.mongo.draft.DraftModuleStore',
                 'DOC_STORE_CONFIG': DOC_STORE_CONFIG,
                 'OPTIONS': modulestore_options
             },
@@ -109,10 +109,16 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
         )
         patcher.start()
         self.addCleanup(patcher.stop)
+        patcher = patch.multiple(
+            'xmodule.modulestore.branch_setting.BranchSetting',
+            _get_branch_from_setting=Mock(return_value='draft'),
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.addTypeEqualityFunc(BlockUsageLocator, '_compareIgnoreVersion')
         self.addTypeEqualityFunc(CourseLocator, '_compareIgnoreVersion')
         # define attrs which get set in initdb to quell pylint
-        self.import_chapter_location = self.store = self.fake_location = self.xml_chapter_location = None
+        self.writable_chapter_location = self.store = self.fake_location = self.xml_chapter_location = None
         self.course_locations = []
 
     # pylint: disable=invalid-name
@@ -125,18 +131,18 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
         else:
             offering = course_key.offering
         course = self.store.create_course(course_key.org, offering)
-        category = self.import_chapter_location.category
-        block_id = self.import_chapter_location.name
+        category = self.writable_chapter_location.category
+        block_id = self.writable_chapter_location.name
         chapter = self.store.create_item(
             # don't use course_location as it may not be the repr
-            course.location, category, location=self.import_chapter_location, block_id=block_id
+            course.location, category, location=self.writable_chapter_location, block_id=block_id
         )
         if isinstance(course.id, CourseLocator):
             self.course_locations[self.MONGO_COURSEID] = course.location.version_agnostic()
-            self.import_chapter_location = chapter.location.version_agnostic()
+            self.writable_chapter_location = chapter.location.version_agnostic()
         else:
             self.assertEqual(course.id, course_key)
-            self.assertEqual(chapter.location, self.import_chapter_location)
+            self.assertEqual(chapter.location, self.writable_chapter_location)
 
     def _course_key_from_string(self, string):
         """
@@ -169,7 +175,7 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
             for course_id, course_key in self.course_locations.iteritems()  # pylint: disable=maybe-no-member
         }
         self.fake_location = Location('foo', 'bar', 'slowly', 'vertical', 'baz')
-        self.import_chapter_location = self.course_locations[self.MONGO_COURSEID].replace(
+        self.writable_chapter_location = self.course_locations[self.MONGO_COURSEID].replace(
             category='chapter', name='Overview'
         )
         self.xml_chapter_location = self.course_locations[self.XML_COURSEID1].replace(
@@ -268,10 +274,10 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
         # r/o try deleting the course (is here to ensure it can't be deleted)
         with self.assertRaises(NotImplementedError):
             self.store.delete_item(self.xml_chapter_location, '**replace_user**')
-        self.store.delete_item(self.import_chapter_location, '**replace_user**')
+        self.store.delete_item(self.writable_chapter_location, '**replace_user**')
         # verify it's gone
         with self.assertRaises(ItemNotFoundError):
-            self.store.get_item(self.import_chapter_location)
+            self.store.get_item(self.writable_chapter_location)
 
     @ddt.data('draft', 'split')
     def test_get_courses(self, default_ms):
@@ -321,7 +327,7 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
     @ddt.data('draft', 'split')
     def test_get_parent_locations(self, default_ms):
         self.initdb(default_ms)
-        parents = self.store.get_parent_locations(self.import_chapter_location)
+        parents = self.store.get_parent_locations(self.writable_chapter_location)
         self.assertEqual(len(parents), 1)
         self.assertEqual(parents[0], self.course_locations[self.MONGO_COURSEID])
 
