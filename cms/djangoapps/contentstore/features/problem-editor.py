@@ -24,7 +24,7 @@ def i_created_blank_common_problem(step):
 
 
 @step('I have created a unit with advanced module "(.*)"$')
-def i_created_annotation_problem(step, advanced_module):
+def i_created_unit_with_advanced_module(step, advanced_module):
     world.create_course_with_unit()
 
     url = world.browser.url
@@ -35,7 +35,7 @@ def i_created_annotation_problem(step, advanced_module):
 
 
 @step('I have created an advanced component "(.*)" of type "(.*)"')
-def i_create_new_advanced_problem(step, component_type, advanced_component):
+def i_create_new_advanced_component(step, component_type, advanced_component):
     world.create_component_instance(
         step=step,
         category='advanced',
