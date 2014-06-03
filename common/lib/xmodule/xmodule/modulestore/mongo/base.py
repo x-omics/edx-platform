@@ -621,7 +621,9 @@ class MongoModuleStore(ModuleStoreWriteBase):
 
     def has_course(self, course_key, ignore_case=False):
         """
-        Is the given course in this modulestore
+        Returns the course_id of the course if it was found, else None
+        Note: we return the course_id instead of a boolean here since the found course may have
+           a different id than the given course_id when ignore_case is True.
 
         If ignore_case is True, do a case insensitive search,
         otherwise, do a case sensitive search
@@ -635,7 +637,11 @@ class MongoModuleStore(ModuleStoreWriteBase):
                     course_query[key] = re.compile(r"(?i)^{}$".format(course_query[key]))
         else:
             course_query = {'_id': location.to_deprecated_son()}
-        return self.collection.find_one(course_query, fields={'_id': True}) is not None
+        course = self.collection.find_one(course_query, fields={'_id': True})
+        if course:
+            return SlashSeparatedCourseKey(course['_id']['org'], course['_id']['course'], course['_id']['name'])
+        else:
+            return None
 
     def has_item(self, usage_key):
         """
@@ -956,7 +962,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
             )
         ]
 
-    def get_modulestore_type(self, course_id):
+    def get_modulestore_type(self):
         """
         Returns an enumeration-like type reflecting the type of this modulestore
         The return can be one of:

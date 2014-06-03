@@ -90,6 +90,20 @@ class MixedModuleStore(ModuleStoreWriteBase):
         # return the first store, as the default
         return self.modulestores[0]
 
+    def _get_modulestore_by_type(self, modulestore_type):
+        """
+        This method should only really be used by tests and migration scripts when necessary.
+        Returns the module store as requested by type.  The type can be:
+
+            SPLIT_MONGO_MODULESTORE_TYPE
+            MONGO_MODULESTORE_TYPE
+            XML_MODULESTORE_TYPE
+        """
+        for store in self.modulestores:
+            if store.get_modulestore_type() == modulestore_type:
+                return store
+        return None
+
     def has_item(self, usage_key):
         """
         Does the course include the xblock who's id is reference?
@@ -176,7 +190,9 @@ class MixedModuleStore(ModuleStoreWriteBase):
 
     def has_course(self, course_id, ignore_case=False):
         """
-        returns whether the course exists
+        returns the course_id of the course if it was found, else None
+        Note: we return the course_id instead of a boolean here since the found course may have
+           a different id than the given course_id when ignore_case is True.
 
         Args:
         * course_id (CourseKey)
@@ -213,7 +229,7 @@ class MixedModuleStore(ModuleStoreWriteBase):
         "mongo" for old-style MongoDB backed courses,
         "split" for new-style split MongoDB backed courses.
         """
-        return self._get_modulestore_for_courseid(course_id).get_modulestore_type(course_id)
+        return self._get_modulestore_for_courseid(course_id).get_modulestore_type()
 
     def get_orphans(self, course_key):
         """
@@ -392,6 +408,7 @@ class MixedModuleStore(ModuleStoreWriteBase):
     def publish(self, location, user_id):
         """
         Save a current draft to the underlying modulestore
+        Returns the newly published item.
         """
         course_id = location.course_key
         store = self._get_modulestore_for_courseid(course_id)
@@ -403,6 +420,7 @@ class MixedModuleStore(ModuleStoreWriteBase):
     def unpublish(self, location, user_id):
         """
         Save a current draft to the underlying modulestore
+        Returns the newly unpublished item.
         """
         course_id = location.course_key
         store = self._get_modulestore_for_courseid(course_id)
@@ -423,3 +441,4 @@ class MixedModuleStore(ModuleStoreWriteBase):
             return store.convert_to_draft(location, user_id)
         else:
             raise NotImplementedError(u"Cannot convert_to_draft on store {}".format(store))
+

@@ -124,6 +124,7 @@ def xblock_handler(request, usage_key_string):
 
         elif request.method == 'DELETE':
             # NAATODO - is this correct?  Why was there a revision=DRAFT added here?
+            # NAATODO - for the unit page - introduce a revert_to_version method instead of calling Delete
             modulestore().delete_item(usage_key, request.user.id)
             return JsonResponse()
         else:  # Since we have a usage_key, we are updating an existing xblock.
@@ -293,11 +294,18 @@ def _save_item(request, usage_key, data=None, children=None, metadata=None, null
 
     if publish:
         if publish == 'make_private':
-            modulestore().unpublish(existing_item.location, request.user.id),
+            try:
+                modulestore().unpublish(existing_item.location, request.user.id),
+            except ItemNotFoundError:
+                pass
         elif publish == 'create_draft':
-            # This recursively clones the existing item location to a draft location (the draft is
-            # implicit, because modulestore is a Draft modulestore)
-            modulestore().convert_to_draft(existing_item.location, request.user.id)
+            try:
+                # This recursively clones the existing item location to a draft location (the draft is
+                # implicit, because modulestore is a Draft modulestore)
+                modulestore().convert_to_draft(existing_item.location, request.user.id)
+            except DuplicateItemError:
+                pass
+
 
     if data:
         # TODO Allow any scope.content fields not just "data" (exactly like the get below this)

@@ -2,6 +2,7 @@ import re
 import logging
 
 from xmodule.contentstore.content import StaticContent
+from xmodule.modulestore.branch_setting import BranchSetting
 
 
 def _prefix_only_url_replace_regex(prefix):
@@ -87,8 +88,10 @@ def rewrite_nonportable_content_links(source_course_id, dest_course_id, text):
     return text
 
 
-def _clone_modules(modulestore, modules, source_course_id, dest_course_id):
+def _clone_modules(modulestore, modules, source_course_id, dest_course_id, only_if_draft):
     for module in modules:
+        if only_if_draft and not module.get_attr('is_draft', False):
+            continue
         original_loc = module.location
         module.location = module.location.map_into_course(dest_course_id)
 
@@ -137,12 +140,14 @@ def clone_course(modulestore, contentstore, source_course_id, dest_course_id):
         raise Exception("Cannot find a course at {0}. Aborting".format(source_course_id))
 
     # Get all modules under this namespace which is (tag, org, course) tuple
+    # NAATODO - Is this the way we want to do this?
+    BranchSetting.set_published()
+    modules = modulestore.get_items(source_course_id)
+    BranchSetting.reset()
+    _clone_modules(modulestore, modules, source_course_id, dest_course_id, only_if_draft=False)
 
-    modules = modulestore.get_items(source_course_id, revision=None)
-    _clone_modules(modulestore, modules, source_course_id, dest_course_id)
-
-    modules = modulestore.get_items(source_course_id, revision='draft')
-    _clone_modules(modulestore, modules, source_course_id, dest_course_id)
+    modules = modulestore.get_items(source_course_id)
+    _clone_modules(modulestore, modules, source_course_id, dest_course_id, only_if_draft=True)
 
     # now iterate through all of the assets and clone them
     # first the thumbnails

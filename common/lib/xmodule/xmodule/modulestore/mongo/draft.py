@@ -75,7 +75,7 @@ class DraftModuleStore(MongoModuleStore):
         Find all locations that are the parents of this location in this
         course.  Needed for path_to_location().
 
-        Returns w/ revision set. If a block has both a draft a non-draft parent, it returns both
+        Returns w/ revision set. If a block has both a draft and non-draft parents, it returns both
         unless revision is set or the thread's branch is set to 'published'.
         '''
         if BranchSetting.is_published():
@@ -119,7 +119,6 @@ class DraftModuleStore(MongoModuleStore):
                 Substring matching pass a regex object.
                 ``name`` is another commonly provided key (Location based stores)
         """
-
         draft_items = []
         if BranchSetting.is_draft():
             draft_items = [
@@ -274,6 +273,7 @@ class DraftModuleStore(MongoModuleStore):
                 if current_entry is None:
                     continue  # already deleted or not in this version
                 for child_loc in current_entry.get('definition', {}).get('children', []):
+                    child_loc = current_loc.course_key.make_usage_key_from_deprecated_string(child_loc)
                     _internal_depth_first(child_loc)
                 self.collection.remove({'_id': current_entry['_id']}, safe=self.collection.safe)
 

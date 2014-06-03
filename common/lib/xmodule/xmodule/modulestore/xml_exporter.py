@@ -9,6 +9,7 @@ from xmodule.contentstore.content import StaticContent
 from xmodule.exceptions import NotFoundError
 from opaque_keys.edx.locations import Location
 from xmodule.modulestore.inheritance import own_metadata
+from xmodule.modulestore.branch_setting import BranchSetting
 from fs.osfs import OSFS
 from json import dumps
 import json
@@ -64,6 +65,9 @@ def export_to_xml(modulestore, contentstore, course_key, root_dir, course_dir):
     export_fs = course.runtime.export_fs = fsm.makeopendir(course_dir)
 
     root = lxml.etree.Element('unknown')
+
+    # NAATODO - is this the way we want to do this?
+    BranchSetting.set_published()
     course.add_xml_to_node(root)
 
     with export_fs.open('course.xml', 'w') as course_xml:
@@ -120,6 +124,8 @@ def export_to_xml(modulestore, contentstore, course_key, root_dir, course_dir):
         course_policy.write(dumps(policy, cls=EdxJSONEncoder))
 
     # export draft content
+    BranchSetting.reset()
+
     # NOTE: this code assumes that verticals are the top most draftable container
     # should we change the application, then this assumption will no longer be valid
     # NOTE: we need to explicitly implement the logic for setting the vertical's parent

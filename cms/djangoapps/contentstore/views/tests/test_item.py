@@ -514,13 +514,20 @@ class TestEditItem(ItemTest):
     def test_make_public(self):
         """ Test making a private problem public (publishing it). """
         # When the problem is first created, it is only in draft (because of its category).
-        with self.assertRaises(ItemNotFoundError):
-            self.get_item_from_modulestore(self.problem_usage_key)
+        private = self.get_item_from_modulestore(self.problem_usage_key)
+        self.assertEqual(
+            PublishState.private,
+            self.store.compute_publish_state(private)
+        )
         self.client.ajax_post(
             self.problem_update_url,
             data={'publish': 'make_public'}
         )
-        self.assertIsNotNone(self.get_item_from_modulestore(self.problem_usage_key))
+        published = self.get_item_from_modulestore(self.problem_usage_key)
+        self.assertEqual(
+            PublishState.public,
+            self.store.compute_publish_state(published)
+        )
 
     def test_make_private(self):
         """ Test making a public problem private (un-publishing it). """
@@ -529,14 +536,21 @@ class TestEditItem(ItemTest):
             self.problem_update_url,
             data={'publish': 'make_public'}
         )
-        self.assertIsNotNone(self.get_item_from_modulestore(self.problem_usage_key))
+        published = self.get_item_from_modulestore(self.problem_usage_key)
+        self.assertEqual(
+            PublishState.public,
+            self.store.compute_publish_state(published)
+        )
         # Now make it private
         self.client.ajax_post(
             self.problem_update_url,
             data={'publish': 'make_private'}
         )
-        with self.assertRaises(ItemNotFoundError):
-            self.get_item_from_modulestore(self.problem_usage_key)
+        private = self.get_item_from_modulestore(self.problem_usage_key)
+        self.assertEqual(
+            PublishState.private,
+            self.store.compute_publish_state(private)
+        )
 
     def test_make_draft(self):
         """ Test creating a draft version of a public problem. """
@@ -681,7 +695,7 @@ class TestEditItem(ItemTest):
         )
         self.assertIsNotNone(self.get_item_from_modulestore(self.problem_usage_key))
 
-        # Now make it private, and check that its published version not exists
+        # Now make it private, and check that its version is private
         resp = self.client.ajax_post(
             self.problem_update_url,
             data={
@@ -689,10 +703,11 @@ class TestEditItem(ItemTest):
             }
         )
         self.assertEqual(resp.status_code, 200)
-        with self.assertRaises(ItemNotFoundError):
-            self.get_item_from_modulestore(self.problem_usage_key)
-        draft_1 = self.get_item_from_modulestore(self.problem_usage_key, True)
-        self.assertIsNotNone(draft_1)
+        draft_1 = self.get_item_from_modulestore(self.problem_usage_key)
+        self.assertEqual(
+            PublishState.private,
+            self.store.compute_publish_state(draft_1)
+        )
 
         # Now check that when a user sends request to make it private when it already is private then
         # user gets that private version instead of getting 'ItemNotFoundError' exception.
@@ -703,24 +718,26 @@ class TestEditItem(ItemTest):
             }
         )
         self.assertEqual(resp.status_code, 200)
-        with self.assertRaises(ItemNotFoundError):
-            self.get_item_from_modulestore(self.problem_usage_key)
-        draft_2 = self.get_item_from_modulestore(self.problem_usage_key, True)
-        self.assertIsNotNone(draft_2)
+        draft_2 = self.get_item_from_modulestore(self.problem_usage_key)
+        self.assertEqual(
+            PublishState.private,
+            self.store.compute_publish_state(draft_1)
+        )
         self.assertEqual(draft_1, draft_2)
 
     def test_published_and_draft_contents_with_update(self):
         """ Create a draft and publish it then modify the draft and check that published content is not modified """
 
         # Make problem public.
-        resp = self.client.ajax_post(
+        self.client.ajax_post(
             self.problem_update_url,
             data={'publish': 'make_public'}
         )
-        self.assertIsNotNone(self.get_item_from_modulestore(self.problem_usage_key))
+        published = self.get_item_from_modulestore(self.problem_usage_key)
+        self.assertIsNotNone(published)
 
         # Now make a draft
-        resp = self.client.ajax_post(
+        self.client.ajax_post(
             self.problem_update_url,
             data={
                 'id': unicode(self.problem_usage_key),
@@ -731,7 +748,6 @@ class TestEditItem(ItemTest):
         )
 
         # Both published and draft content should be different
-        published = self.get_item_from_modulestore(self.problem_usage_key)
         draft = self.get_item_from_modulestore(self.problem_usage_key)
         self.assertNotEqual(draft.data, published.data)
 
@@ -746,7 +762,6 @@ class TestEditItem(ItemTest):
         self.assertEqual(resp.status_code, 200)
 
         # Both published and draft content should still be different
-        published = self.get_item_from_modulestore(self.problem_usage_key)
         draft = self.get_item_from_modulestore(self.problem_usage_key)
         self.assertNotEqual(draft.data, published.data)
 

@@ -24,27 +24,9 @@ class Migration(DataMigration):
         """
         Converts group table entries for write access and beta_test roles to course access roles table.
         """
-        def get_modulestore(ms_type, key):
-            """
-            Find the modulestore of the given type trying the key first
-            """
-            try:
-                store = modulestore(key)
-                if isinstance(store, MixedModuleStore):
-                    store = store.modulestores[key]
-                if store.get_modulestore_type(None) == ms_type:
-                    return store
-                else:
-                    return None
-            except KeyError:
-                return None
-
         # Note: Remember to use orm['appname.ModelName'] rather than "from appname.models..."
         loc_map_collection = loc_mapper().location_map
-        xml_ms = get_modulestore(XML_MODULESTORE_TYPE, 'xml')
-        mongo_ms = get_modulestore(MONGO_MODULESTORE_TYPE, 'default')
-        if mongo_ms is None:
-            mongo_ms = get_modulestore(MONGO_MODULESTORE_TYPE, 'direct')
+        store = modulestore()
 
         query = Q(name__startswith='staff') | Q(name__startswith='instructor') | Q(name__startswith='beta_testers')
         for group in orm['auth.Group'].objects.filter(query).exclude(name__contains="/").all():
@@ -86,21 +68,11 @@ class Migration(DataMigration):
                 ).exists():
                     # old auth was of form role_coursenum. Grant access to all such courses wildcarding org and run
                     # look in xml for matching courses
-                    if xml_ms is not None:
-                        for course in xml_ms.get_courses():
-                            if course_id_string == course.id.course.lower():
-                                _migrate_users(course.id, role)
 
-                    if mongo_ms is not None:
-                        mongo_query = re.compile(ur'^{}$'.format(course_id_string), re.IGNORECASE)
-                        for mongo_entry in mongo_ms.collection.find(
-                            {"_id.category": "course", "_id.course": mongo_query}, fields=["_id"]
-                        ):
-                            mongo_id_dict = mongo_entry['_id']
-                            course_key = SlashSeparatedCourseKey(
-                                mongo_id_dict['org'], mongo_id_dict['course'], mongo_id_dict['name']
-                            )
-                            _migrate_users(course_key, role)
+                    course_key = SlashSeparatedCourseKey.from_deprecated_string(course_id_string)
+                    course_key = store.has_course(course_key, ignore_case=True)
+                    if course_key:
+                        _migrate_users(course_key, role)
 
 
     def backwards(self, orm):

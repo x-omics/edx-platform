@@ -797,7 +797,7 @@ class XMLModuleStore(ModuleStoreReadBase):
 
         return self.parent_trackers[location.course_key].parents(location)
 
-    def get_modulestore_type(self, course_id):
+    def get_modulestore_type(self):
         """
         Returns an enumeration-like type reflecting the type of this modulestore
         The return can be one of:

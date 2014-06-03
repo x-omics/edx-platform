@@ -350,10 +350,13 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
 
     def has_course(self, course_id, ignore_case=False):
         '''
-        Does this course exist in this modulestore.
+        Returns the course_id of the course if it was found, else None
+        Note: we return the course_id instead of a boolean here since the found course may have
+           a different id than the given course_id when ignore_case is True.
         '''
         assert(isinstance(course_id, CourseLocator))
         course_index = self.db_connection.get_course_index(course_id, ignore_case)
+        # NAATODO - need to return found course_id instead of boolean here.
         return course_index is not None
 
     def has_item(self, usage_key):
@@ -1434,7 +1437,7 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
         else:
             return DefinitionLocator(definition['category'], definition['_id'])
 
-    def get_modulestore_type(self, course_id):
+    def get_modulestore_type(self):
         """
         Returns an enumeration-like type reflecting the type of this modulestore
         The return can be one of:

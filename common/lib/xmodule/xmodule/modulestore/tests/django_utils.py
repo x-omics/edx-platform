@@ -6,6 +6,8 @@ from uuid import uuid4
 from django.test import TestCase
 from xmodule.modulestore.django import (
     modulestore, clear_existing_modulestores, loc_mapper)
+from xmodule.modulestore import MONGO_MODULESTORE_TYPE
+from xmodule.modulestore.branch_setting import BranchSetting
 from xmodule.contentstore.django import contentstore
 
 
@@ -145,10 +147,7 @@ class ModuleStoreTestCase(TestCase):
         """
         If using a Mongo-backed modulestore & contentstore, drop the collections.
         """
-
-        # This will return the mongo-backed modulestore
-        # even if we're using a mixed modulestore
-        store = modulestore()
+        store = modulestore()._get_modulestore_by_type(MONGO_MODULESTORE_TYPE)  # pylint: disable=W0212
         if hasattr(store, 'collection'):
             connection = store.collection.database.connection
             store.collection.drop()
@@ -200,11 +199,14 @@ class ModuleStoreTestCase(TestCase):
 
     def _pre_setup(self):
         """
-        Flush the ModuleStore before each test.
+        Flush the ModuleStore and reset the branch setting before each test.
         """
 
         # Flush the Mongo modulestore
         ModuleStoreTestCase.drop_mongo_collections()
+
+        # Reset Branch Setting
+        BranchSetting.reset()
 
         # Call superclass implementation
         super(ModuleStoreTestCase, self)._pre_setup()
