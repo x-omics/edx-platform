@@ -25,13 +25,17 @@ class RefundTests(ModuleStoreTestCase):
         )
         self.course_id = self.course.location.course_key
         self.client = Client()
-        self.admin = UserFactory.create(username='test_admin',
-                                        email='test_admin+support@edx.org',
-                                        password='foo')
+        self.admin = UserFactory.create(
+            username='test_admin',
+            email='test_admin+support@edx.org',
+            password='foo'
+        )
         self.admin.user_permissions.add(Permission.objects.get(codename='change_courseenrollment'))
         self.client.login(username=self.admin.username, password='foo')
-        self.student = UserFactory.create(username='student',
-                                          email='student+refund@edx.org')
+        self.student = UserFactory.create(
+            username='student',
+            email='student+refund@edx.org'
+        )
         self.course_mode = CourseMode.objects.get_or_create(course_id=self.course_id, mode_slug='verified')[0]
 
         self.order = None

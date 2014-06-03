@@ -54,6 +54,18 @@ class RefundForm(forms.Form):
                 raise forms.ValidationError(_("No order found for {user} in course {course_id}").format(user=user, course_id=course_id))
         return self.cleaned_data
 
+    def is_valid(self):
+        is_valid = super(RefundForm, self).is_valid()
+        if is_valid and self.cleaned_data.get('confirmed') != 'true':
+            # this is a two-step form: first look up the data, then issue the refund.
+            # first time through, set the hidden "confirmed" field to true and then redisplay the form
+            # second time through, do the unenrollment/refund.
+            data = dict(self.data.items())
+            self.cleaned_data['confirmed'] = data['confirmed'] = 'true'
+            self.data = data
+            is_valid = False
+        return is_valid
+
 
 class SupportDash(TemplateView):
     template_name = 'dashboard/support.html'
@@ -72,20 +84,14 @@ class Refund(FormView):
         return kwargs
 
     def form_valid(self, form):
-        if form.cleaned_data['confirmed'] == 'true':
-            user = form.cleaned_data['user']
-            course_id = form.cleaned_data['course_id']
-            enrollment = form.cleaned_data['enrollment']
-            cert = form.cleaned_data['cert']
-            enrollment.can_refund = True
-            enrollment.update_enrollment(is_active=False)
+        user = form.cleaned_data['user']
+        course_id = form.cleaned_data['course_id']
+        enrollment = form.cleaned_data['enrollment']
+        cert = form.cleaned_data['cert']
+        enrollment.can_refund = True
+        enrollment.update_enrollment(is_active=False)
 
-            log.info(u"%s manually refunded %s %s", self.request.user, user, course_id)
-            messages.success(self.request, _("Unenrolled {user} from {course_id}").format(user=user, course_id=course_id))
-            messages.success(self.request, _("Refunded {cost} for order id {order_id}").format(cost=cert.unit_cost, order_id=cert.order.id))
-            return HttpResponseRedirect('/support/refund/')
-        else:
-            form.data = {'user': form.data['user'], 'course_id': form.data['course_id'], 'confirmed': 'true'}
-            form.cleaned_data['confirmed'] = 'true'
-            log.info(u"%s wants to refund %s %s", self.request.user, form.data['user'], form.data['course_id'])
-            return self.form_invalid(form)
+        log.info(u"%s manually refunded %s %s", self.request.user, user, course_id)
+        messages.success(self.request, _("Unenrolled {user} from {course_id}").format(user=user, course_id=course_id))
+        messages.success(self.request, _("Refunded {cost} for order id {order_id}").format(cost=cert.unit_cost, order_id=cert.order.id))
+        return HttpResponseRedirect('/support/refund/')

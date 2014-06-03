@@ -943,11 +943,14 @@ class CourseEnrollment(models.Model):
 
     def refundable(self):
         """
-        For paid/verified certificates, students may receive a refund IFF they have
+        For paid/verified certificates, students may receive a refund if they have
         a verified certificate and the deadline for refunds has not yet passed.
         """
-        # hack to support manual refunds
-        # (a signal will call this method and needs to return true for manual refunds)
+        # In order to support manual refunds past the deadline, set can_refund on this object.
+        # On unenrolling, the "unenroll_done" signal calls CertificateItem.refund_cert_callback(),
+        # which calls this method to determine whether to refund the order.
+        # This can't be set directly because refunds currently happen as a side-effect of unenrolling.
+        # (side-effects are bad)
         if getattr(self, 'can_refund', None) is not None:
             return True
         course_mode = CourseMode.mode_for_course(self.course_id, 'verified')

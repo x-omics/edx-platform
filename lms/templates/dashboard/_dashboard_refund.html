@@ -37,7 +37,7 @@ strong {
             {% csrf_token %}
             {{form.as_p}}
             <p>
-            <input type="button" value="Cancel" onclick="{% if cert %}location=location{%else%}document.getElementById('refund_form').reset(){%endif%}"/> <input type="submit" value="{% if cert %}Refund{% else %}Confirm{% endif %}" /> 
+            <input type="button" value="Cancel" onclick="javascript:location=location"/> <input type="submit" value="{% if cert %}Refund{% else %}Confirm{% endif %}" /> 
             </p>
         </form>
         {% if cert %}
