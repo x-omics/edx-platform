@@ -3,6 +3,7 @@ Mixin defining common Studio functionality
 """
 
 import datetime
+import dateutil.parser
 
 from xblock.fields import Scope, Field, Integer, XBlockMixin
 
@@ -15,8 +16,11 @@ class DateTuple(Field):
         return datetime.datetime(*value[0:6])
 
     def to_json(self, value):
-        if value is None:
+        if value in [None, ""]:
             return None
+
+        if isinstance(value, str): 
+            value = dateutil.parser.parse(value)
 
         return list(value.timetuple())
 
