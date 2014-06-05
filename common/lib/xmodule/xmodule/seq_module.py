@@ -52,7 +52,7 @@ class SequenceModule(SequenceFields, XModule):
         super(SequenceModule, self).__init__(*args, **kwargs)
 
         # if position is specified in system, then use that instead
-        if getattr(self.system, 'position', None) is not None:
+        if getattr(self.system, 'position', None) not in [None, "None"]:
             self.position = int(self.system.position)
 
     def get_progress(self):
