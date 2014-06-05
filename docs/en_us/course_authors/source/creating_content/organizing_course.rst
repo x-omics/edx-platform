@@ -24,7 +24,7 @@ subsections to correspond to lessons.
 
 .. note::  
   We recommend that you review :ref:`Guidelines for Creating Accessible Content`
- before developing content for your course.
+  before developing content for your course.
 
 
 ==================

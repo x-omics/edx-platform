@@ -57,13 +57,21 @@ Specify Group Configurations
 
 Before you can create content experiments, you must define group configurations.
 
-A group configuration defines how many groups, or segments, of students are in
+A group configuration defines how many groups of students are in
 an experiment. You can have any number of group configurations in your course.
 When you create a content experiment, you select the group configuration to use.
 
-For example, your course can have one group configuration that segments students
-into two groups, and another group configuration that segments students into
-four groups. A content experiment can then use either group configuration.
+For example, you may want to do one content experiment that presents either a
+video or a reading assignment to your students, and another content experiment
+that presents the same question using four different problem types. For the
+first content experiment, you need a group configuration that divides your
+students into two groups, and for the second content experiment, you need a
+group configuration that divides your students into four groups.
+
+For each of the group configurations that you define, students are assigned to
+one of the possible groups. Students remain in those assigned groups regardless
+of how many content experiments you set up that use the same group
+configuration.
 
 To specify group configurations, you modify the value for the
 ``user_partitions`` policy key in the Advanced Settings.
@@ -73,7 +81,7 @@ each of which defines the groups of students. See the following examples for
 more information.
 
 =============================================
-Example of a Simple Group Configuration
+Example:  One Group Configuration
 =============================================
 
 The following is an example JSON object that defines an group configuration with two student segments.
@@ -97,17 +105,18 @@ In this example:
   is referenced in the ``user_partition`` attribute of the ``<split_test>``
   element in the content experiment file.
 
-* The ``groups`` definition identifies the groups, or segments, to which
+* The ``groups`` array identifies the groups, or segments, to which
   students are randomly assigned. For XML courses, each group ``id`` value is
   referenced in the ``group_id_to_child`` attribute of the ``<split_test>``
   element.
 
 ==========================================================
-Example of a More Complex Content Experiment Policy
+Example: Multiple Group Configurations
 ==========================================================
 
-The following is an example JSON object that defines two group configurations,
-the first with two student groups, the second with three student segments.
+The following is an example JSON object that defines two group configurations.
+The first group configuration divides students into two groups, and the second
+divides students into three groups.
 
 .. code-block:: json
 
@@ -136,38 +145,34 @@ the first with two student groups, the second with three student segments.
                                      "version": 1}]}]
 
 ==========================================================
-Modifying Experiments in the Content Experiment Policy
+Modifying Group Configurations
 ==========================================================
 
-After a course has started, do not delete group configurations in the content
-experiment policy file.
+After the course starts, **do not**:
 
+* Delete group configurations.
+
+* Change the ``id`` value of a group configuration or group.
+  
 You can add group configurations at any time.
 
-.. warning:: 
-  Do not change the ``id`` value of a group configuration after a course starts.
-
 ==========================================================
-Modifying Groups in the Content Experiment Policy
+Removing Groups from Group Configurations
 ==========================================================
-
-Once a student is assigned to a group, the students stays in that group for all
-group configurations that use that group. For example, students in Group A for
-one group configuration will be in Group A for other group configurations that
-use that group.
 
 After a course has started, you may find that students in a specific group are
 having a problem or a poor experience. In this situation, you can remove the
 group from the group configuration. Content that was specified for that
 group is then no longer part of the course.
 
-Students in the removed group are reassigned to another group. Any problems that
-these students completed in the removed group content do not count toward the
-students' grades. The students must begin the problem set again and complete all
-the problems in the group content to which they've been reassigned.
+Students in the removed group are reassigned to one of the other groups in the
+group configuration. Any problems that these students completed in the removed
+group content do not count toward the students' grades. The students must begin
+the problem set again and complete all the problems in the group content to
+which they've been reassigned.
 
 Removing a group impacts the course event data. Ensure that researchers
-evaluating your course results are aware of the segment you removed and the
+evaluating your course results are aware of the group you removed and the
 date.
 
 .. warning:: 
@@ -179,7 +184,7 @@ Specify Group Configurations in an XML Course
 
 If you are developing your course in XML, you define group configurations in the
 ``policy.json`` file in the ``policies`` directory. Use the same guidelines
-given above for the ``user_partitions`` key in Advanced Settings.
+given above for the ``user_partitions`` policy key in Advanced Settings.
 
 See `Define the Experiment Content in the Split Test File`_ for more
 information on how the XML for the content experiment uses these settings.
@@ -191,7 +196,7 @@ information on how the XML for the content experiment uses these settings.
 Configure a Content Experiment in Studio
 ********************************************
 
-To configure the content experiment in Studio, you:
+To configure a content experiment in Studio, you:
 
 #. `Create the content experiment`_.
 #. `Create content for groups in the content experiment`_.
@@ -201,10 +206,11 @@ To configure the content experiment in Studio, you:
 Create the Content Experiment
 ================================
 
-After you :ref:`Enable Content Experiments`, you can add content experiments to a unit page in the course outline.
+After you :ref:`Enable Content Experiments` and :ref:`Specify Group
+Configurations`, you can add content experiments to a unit page in the course
+outline.
 
-
-#. In a private or draft unit page, under **Add New Component**, click
+#. In a private or draft unit page, under **Add New Component** click
    **Advanced**.
 
 #. Select **Content Experiment**.
@@ -229,7 +235,7 @@ After you :ref:`Enable Content Experiments`, you can add content experiments to 
      After you select a group configuration and save the content experiment, you
      cannot change the group configuration.
 
-#. Optionally, change the **Display Name**.  The Display Name is only used in
+#. Modify the the **Display Name**.  The Display Name is only used in
    Studio; students do not see this value.
 
 #. Click **Save**.
@@ -244,7 +250,8 @@ You can now create content for the groups in the experiment.
 Create Content for Groups in the Content Experiment
 ================================================================
    
-After you select a group configuration, in the content experiment component, click **View**.
+After you select a group configuration, in the content experiment component
+click **View**.
 
 The content experiment page that opens automatically includes a container for
 each group that is defined in the group configuration you selected. For example,
@@ -254,8 +261,8 @@ the following page:
 .. image:: ../Images/content_experiment_container.png
  :alt: The content experiment page with two groups
 
-You can add content to both groups as needed, just as you would add content to
-any container page. See :ref:`Components that Contain Other Components` for more
+You add content to both groups as needed, just as you would add content to any
+container page. See :ref:`Components that Contain Other Components` for more
 information.
 
 For example, you can add an HTML component and a video to Group A:
@@ -287,10 +294,9 @@ students sees:
  :alt: Image of a unit page with Group 1 selected
 
 .. note:: 
-  The example course content in this chapter uses content experiment
-  terminology to make the functionality clear. Typically, you do not want to use
-  terminology in course content that would make students aware of the
-  experiment.
+  The example course content in this chapter uses content experiment terminology
+  to make the functionality clear. Typically, you would not use terminology in
+  course content that would make students aware of the experiment.
 
 
 .. _Configure the Content Experiment in XML:
@@ -315,7 +321,7 @@ You reference a content experiment in the file for the subsection in the ``seque
 
 .. code-block:: xml
 
-    .....
+    ...
     <vertical url_name="name for the unit that contains the A/B test" display_name="A/B Test Unit">
         <split_test url_name="name of A/B test file in the split_test folder"/>
     </vertical>

@@ -73,7 +73,7 @@ release date.
 
 .. note:: 
   For courses created before January 14, 2014, when you create a new section or
-  subsection, the default release date is January 1, 1970. This means that
+  subsection, the default release date is January 1, 1970. This meant that
   public units are immediately published, and you must change this date to the
   future to prevent students from viewing the content.
 
