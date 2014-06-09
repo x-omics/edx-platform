@@ -47,7 +47,7 @@ def import_static_content(
 
             content_path = os.path.join(dirname, filename)
 
-            if filename.endswith('~'):
+            if filename.startswith('._') or filename.endswith('~'):
                 if verbose:
                     log.debug('skipping static content %s...', content_path)
                 continue
@@ -102,6 +102,9 @@ def import_static_content(
             # store the remapping information which will be needed
             # to subsitute in the module data
             remap_dict[fullname_with_subpath] = asset_key
+
+    # Remove all redundant Mac OS metadata files which start with '._'
+    static_content_store.remove_content_for_course(target_course_id, '^._.*$')
 
     return remap_dict
 

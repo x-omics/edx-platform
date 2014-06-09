@@ -163,6 +163,18 @@ class MongoContentStore(ContentStore):
             course_key, start=start, maxresults=maxresults, get_thumbnails=False, sort=sort
         )
 
+    def remove_content_for_course(self, course_key, file_name_regex):
+        """
+        Finds and removes all file/files with given filename
+
+        :param course_key: the :class:`CourseKey` identifying the course
+        :param file_name_regex: the file name (or regex) of asset/assets which needs to be removed
+        """
+        course_filter = course_key.make_asset_key("asset", None)
+        query = location_to_query(course_filter, wildcard=True, tag=XASSET_LOCATION_TAG)
+        query['_id.name'] = {'$regex': u'^{}$'.format(file_name_regex)}
+        self.fs_files.remove(query)
+
     def _get_all_content_for_course(self, course_key, get_thumbnails=False, start=0, maxresults=-1, sort=None):
         '''
         Returns a list of all static assets for a course. The return format is a list of dictionary elements. Example:
