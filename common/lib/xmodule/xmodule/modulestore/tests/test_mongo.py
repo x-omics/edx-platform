@@ -471,6 +471,32 @@ class TestMongoModuleStore(unittest.TestCase):
         finally:
             shutil.rmtree(root_dir)
 
+    def test_has_changes(self):
+        """
+        Tests that has_changes() only returns true when changes are present
+        """
+        location = Location('edX', 'changes', '2012_Fall', 'html', 'test_html')
+        dummy_user = 123
+
+        # Create a dummy component to test against
+        self.draft_store.create_and_save_xmodule(location)
+
+        # Not yet published, so changes are present
+        self.assertTrue(self.draft_store.has_changes(location))
+
+        # Publish and verify that there are no unpublished changes
+        self.draft_store.publish(location, dummy_user)
+        self.assertFalse(self.draft_store.has_changes(location))
+
+        # Change the component, then check that there now are changes
+        component = self.draft_store.get_item(location)
+        component.display_name = component.display_name + ' Changed'
+        self.draft_store.update_item(component, dummy_user)
+        self.assertTrue(self.draft_store.has_changes(location))
+
+        # Publish and verify again
+        self.draft_store.publish(location, dummy_user)
+        self.assertFalse(self.draft_store.has_changes(location))
 
 class TestMongoKeyValueStore(object):
     """

@@ -560,5 +560,7 @@ def _get_module_info(usage_key, rewrite_static_links=True):
     return {
         'id': unicode(usage_key),
         'data': data,
-        'metadata': own_metadata(module)
+        'metadata': own_metadata(module),
+        'edited_by': module.edited_by,
+        'edited_on': module.edited_on
     }

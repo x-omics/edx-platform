@@ -194,6 +194,32 @@ class DraftModuleStore(MongoModuleStore):
 
         return
 
+    def has_changes(self, location):
+        """
+        Check if the xblock has been changed since it was last published.
+        :param location: location to check
+        :return: True if the xblock has unpublished changes
+        """
+
+        # Ignore attempts to publish things that can't be drafts
+        if location.category in DIRECT_ONLY_CATEGORIES:
+            return False
+
+        try:
+            published = super(DraftModuleStore, self).get_item(location)
+        except ItemNotFoundError:
+            return True
+
+        draft = self.get_item(location)
+
+        if draft.edited_on:
+            if published.edited_on:
+                return draft.edited_on > published.edited_on
+            else:
+                return True
+        else:
+            return False
+
     def publish(self, location, published_by_id):
         """
         Save a current draft to the underlying modulestore

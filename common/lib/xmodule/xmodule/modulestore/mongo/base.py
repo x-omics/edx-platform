@@ -21,6 +21,8 @@ import re
 from bson.son import SON
 from fs.osfs import OSFS
 from path import path
+from datetime import datetime
+from pytz import UTC
 
 from importlib import import_module
 from xmodule.errortracker import null_error_tracker, exc_info_to_str
@@ -206,6 +208,12 @@ class CachingDescriptorSystem(MakoDescriptorSystem):
                     # to python values
                     metadata_to_inherit = self.cached_metadata.get(non_draft_loc.to_deprecated_string(), {})
                     inherit_metadata(module, metadata_to_inherit)
+
+                # restore editing information
+                edit_info = json_data.get('edit_info', {})
+                module.edited_by = edit_info.get('edited_by')
+                module.edited_on = edit_info.get('edited_on')
+
                 # decache any computed pending field settings
                 module.save()
                 return module
@@ -868,11 +876,16 @@ class MongoModuleStore(ModuleStoreWriteBase):
         '''
         return self.get_course(location.course_key, depth)
 
-    def _update_single_item(self, location, update):
+    def _update_single_item(self, location, update, user_id):
         """
         Set update on the specified item, and raises ItemNotFoundError
         if the location doesn't exist
         """
+
+        update['edit_info'] = {
+            'edited_on': datetime.now(UTC),
+            'edited_by': user_id,
+        }
 
         # See http://www.mongodb.org/display/DOCS/Updating for
         # atomic update syntax
@@ -906,7 +919,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
             if xblock.has_children:
                 children = self._convert_reference_fields_to_strings(xblock, {'children': xblock.children})
                 payload.update({'definition.children': children['children']})
-            self._update_single_item(xblock.scope_ids.usage_id, payload)
+            self._update_single_item(xblock.scope_ids.usage_id, payload, user_id)
             # for static tabs, their containing course also records their display name
             if xblock.scope_ids.block_type == 'static_tab':
                 course = self._get_course_for_item(xblock.scope_ids.usage_id)
