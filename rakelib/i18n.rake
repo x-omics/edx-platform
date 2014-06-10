@@ -1,11 +1,5 @@
 # --- Internationalization tasks
 
-I18N_REPORT_DIR = report_dir_path('i18n')
-I18N_XUNIT_REPORT = File.join(I18N_REPORT_DIR, 'nosetests.xml')
-
-directory I18N_REPORT_DIR
-
-
 namespace :i18n do
 
   desc "Extract localizable strings from sources"
