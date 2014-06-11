@@ -498,6 +498,28 @@ class TestMongoModuleStore(unittest.TestCase):
         self.draft_store.publish(location, dummy_user)
         self.assertFalse(self.draft_store.has_changes(location))
 
+    def test_update_edited_on(self):
+        """
+        Tests that edited_on is set correctly during an update
+        """
+        location = Location('edX', 'editInfoTest', '2012_Fall', 'html', 'test_html')
+        dummy_user = 123
+
+        # Create a dummy component to test against
+        self.draft_store.create_and_save_xmodule(location)
+
+        # Store the current edit time
+        component = self.draft_store.get_item(location)
+        old_edited_on = component.edited_on
+
+        # Change the component, then store the new edit time
+        component.display_name = component.display_name + ' Changed'
+        self.draft_store.update_item(component, dummy_user)
+        new_edited_on = self.draft_store.get_item(location).edited_on
+
+        self.assertLess(old_edited_on, new_edited_on)
+
+
 class TestMongoKeyValueStore(object):
     """
     Tests for MongoKeyValueStore.

@@ -831,6 +831,27 @@ class SplitModuleItemTests(SplitModuleTest):
         modulestore().xblock_publish(dummy_user, draft_course, published_course, [head], None)
         self.assertFalse(modulestore().has_changes(head))
 
+    def test_update_edit_info(self):
+        """
+        Tests that edited_on is set correctly during an update
+        """
+        draft_course = CourseLocator(org='testx', offering='GreekHero', branch='draft')
+        head = draft_course.make_usage_key('course', 'head12345')
+        dummy_user = 'testUser'
+
+        # Store the current edit time
+        course = modulestore().get_item(head)
+        old_edited_on = course.edited_on
+
+        # Change the component, then store the new edit time
+        course.show_calculator = not course.show_calculator
+        modulestore().update_item(course, dummy_user)
+        updated_course = modulestore().get_item(head)
+        new_edited_on = updated_course.edited_on
+
+        # Check that edit times are correctly ordered and that dummy_user made the edit
+        self.assertLess(old_edited_on, new_edited_on)
+        self.assertEqual(updated_course.edited_by, dummy_user)
 
     def test_get_non_root(self):
         # not a course obj

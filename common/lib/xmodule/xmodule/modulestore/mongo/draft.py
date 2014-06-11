@@ -201,10 +201,11 @@ class DraftModuleStore(MongoModuleStore):
         :return: True if the xblock has unpublished changes
         """
 
-        # Ignore attempts to publish things that can't be drafts
+        # Direct only categories can never have changes as they can't be published
         if location.category in DIRECT_ONLY_CATEGORIES:
             return False
 
+        # If there isn't a published version, then the draft clearly has unpublished changes
         try:
             published = super(DraftModuleStore, self).get_item(location)
         except ItemNotFoundError:
@@ -212,6 +213,7 @@ class DraftModuleStore(MongoModuleStore):
 
         draft = self.get_item(location)
 
+        # edited_on may be None if the model was last edited before edit time tracking
         if draft.edited_on:
             if published.edited_on:
                 return draft.edited_on > published.edited_on
