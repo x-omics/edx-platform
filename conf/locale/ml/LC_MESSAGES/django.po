@@ -955,7 +955,7 @@ msgstr ""
 #: common/lib/capa/capa/responsetypes.py
 #: common/templates/course_modes/choose.html
 msgid "or"
-msgstr ""
+msgstr "അല്ലെങ്കില്‍"
 
 #: common/lib/capa/capa/responsetypes.py
 msgid "error getting student answer from {student_answers}"
@@ -4477,7 +4477,7 @@ msgstr ""
 #: lms/templates/discussion/_underscore_templates.html
 #: lms/templates/discussion/mustache/_inline_thread_show.mustache
 msgid "Delete"
-msgstr ""
+msgstr "നീക്കം ചെയ്യുക"
 
 #: lms/templates/wiki/delete.html
 msgid "You cannot delete a root article."
@@ -5121,7 +5121,7 @@ msgstr ""
 #: lms/templates/discussion/mustache/_inline_discussion_cohorted.mustache
 #: lms/templates/verify_student/face_upload.html
 msgid "Cancel"
-msgstr ""
+msgstr "ഒഴിവാക്കു"
 
 #: cms/templates/index.html
 #: lms/templates/instructor/instructor_dashboard_2/course_info.html
@@ -6885,7 +6885,7 @@ msgstr ""
 
 #: lms/templates/video.html
 msgid "Play"
-msgstr ""
+msgstr "പ്ലേ"
 
 #: lms/templates/video.html
 msgid "Speeds"
@@ -6907,7 +6907,7 @@ msgstr ""
 
 #: lms/templates/video.html
 msgid "Fill browser"
-msgstr ""
+msgstr "ഫയല്‍ ബ്രൌസര്‍."
 
 #: lms/templates/video.html
 msgid "HD off"
@@ -6915,7 +6915,7 @@ msgstr ""
 
 #: lms/templates/video.html lms/templates/video.html
 msgid "Turn off captions"
-msgstr ""
+msgstr "എഴുത്തുകള്‍ ഒഴിവാക്കുക"
 
 #: lms/templates/video.html
 msgid "Skip to end of transcript."
@@ -8304,7 +8304,7 @@ msgstr ""
 
 #: lms/templates/discussion/_similar_posts.html
 msgid "Hide"
-msgstr ""
+msgstr "ഒളിപ്പിക്കുക"
 
 #: lms/templates/discussion/_thread_list_template.html
 msgid "Discussion Home"
@@ -11215,7 +11215,7 @@ msgstr ""
 
 #: cms/templates/asset_index.html
 msgid "Your file has been deleted."
-msgstr ""
+msgstr "നിങ്ങളുടെ ഫയല്‍ നീക്കം ചെയ്തിരിക്കുന്നു"
 
 #: cms/templates/asset_index.html
 msgid "close alert"
@@ -12503,7 +12503,7 @@ msgstr ""
 
 #: cms/templates/overview.html
 msgid "Collapse All Sections"
-msgstr ""
+msgstr "എല്ലാ മേഖലകളും ഒരുമിപ്പിക്കുക"
 
 #: cms/templates/overview.html
 msgid "New Section"
@@ -12884,7 +12884,7 @@ msgstr ""
 
 #: cms/templates/settings_advanced.html
 msgid "Your policy changes have been saved."
-msgstr ""
+msgstr "നിങ്ങളുടെ നയങ്ങള്‍ സൂക്ഷിച്ചിരിക്കുന്നു"
 
 #: cms/templates/settings_advanced.html
 msgid "There was an error saving your information. Please see below."
