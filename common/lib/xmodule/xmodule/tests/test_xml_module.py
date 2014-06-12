@@ -45,9 +45,10 @@ class TestFields(object):
                 {'display_name': 'second', 'value': 'value b'}]
     )
     showanswer = String(
-        help="When to show the problem answer to the student",
+        display_name="Show Answer",
+        help="Defines when to show the answer to the problem.",
         scope=Scope.settings,
-        default="finished"
+        default="finished",
     )
     # Used for testing select type
     float_select = Float(scope=Scope.settings, default=.999, values=[1.23, 0.98])

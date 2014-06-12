@@ -36,8 +36,7 @@ require(["domReady!", "jquery", "js/models/settings/advanced", "js/views/setting
 
   $("#deprecated-settings").click(function() {
       var $this = $(this);
-      editor.render_deprecated = $this.is(':checked');
-      editor.render();
+      // TODO: Frances will perform black magic here.
   });
 
 });

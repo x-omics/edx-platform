@@ -176,7 +176,7 @@ def cancel_does_not_save_changes(step):
 def enable_latex_compiler(step):
     url = world.browser.url
     step.given("I select the Advanced Settings")
-    change_value(step, 'use_latex_compiler', 'true')
+    change_value(step, 'Enable LaTeX Compiler', 'true')
     world.visit(url)
     world.wait_for_xmodule()
 

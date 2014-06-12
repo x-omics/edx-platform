@@ -592,14 +592,14 @@ def _config_course_advanced_components(request, course_module):
             component_types = tab_component_map.get(tab_type)
             found_ac_type = False
             for ac_type in component_types:
-                if ac_type in request.json[ADVANCED_COMPONENT_POLICY_KEY]:
+                if ac_type in request.json[ADVANCED_COMPONENT_POLICY_KEY]["value"]:
                     # Add tab to the course if needed
                     changed, new_tabs = add_extra_panel_tab(tab_type, course_module)
                     # If a tab has been added to the course, then send the
                     # metadata along to CourseMetadata.update_from_json
                     if changed:
                         course_module.tabs = new_tabs
-                        request.json.update({'tabs': new_tabs})
+                        request.json.update({'tabs': {'value': new_tabs}})
                         # Indicate that tabs should not be filtered out of
                         # the metadata
                         filter_tabs = False  # Set this flag to avoid the tab removal code below.
@@ -611,7 +611,7 @@ def _config_course_advanced_components(request, course_module):
                 changed, new_tabs = remove_extra_panel_tab(tab_type, course_module)
                 if changed:
                     course_module.tabs = new_tabs
-                    request.json.update({'tabs':new_tabs})
+                    request.json.update({'tabs': {'value': new_tabs}})
                     # Indicate that tabs should *not* be filtered out of
                     # the metadata
                     filter_tabs = False
