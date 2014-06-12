@@ -198,29 +198,30 @@ class DraftModuleStore(MongoModuleStore):
         """
         Check if the xblock has been changed since it was last published.
         :param location: location to check
-        :return: True if the xblock has unpublished changes
+        :return: True if the draft and published versions differ
         """
 
-        # Direct only categories can never have changes as they can't be published
+        # Direct only categories can never have changes because they can't have drafts
         if location.category in DIRECT_ONLY_CATEGORIES:
             return False
 
-        # If there isn't a published version, then the draft clearly has unpublished changes
-        try:
-            published = super(DraftModuleStore, self).get_item(location)
-        except ItemNotFoundError:
-            return True
-
         draft = self.get_item(location)
 
-        # edited_on may be None if the model was last edited before edit time tracking
+        # TODO figure out if published_date ever updates correctly
+        # If the draft was never published, then it clearly has unpublished changes
+        if not (hasattr(draft, 'published_date') and draft.published_date):
+            print "no pub"
+            return True
+
+        print "has pub"
+
+        # edited_on may be None if the draft was last edited before edit time tracking
+        # If the draft does not have an edit time, we play it safe and assume there are differences
         if draft.edited_on:
-            if published.edited_on:
-                return draft.edited_on > published.edited_on
-            else:
-                return True
+            print "comparing draft@" + str(draft.edited_on) + " to pub@" + str(draft.published_date)
+            return draft.edited_on > draft.published_date
         else:
-            return False
+            return True
 
     def publish(self, location, published_by_id):
         """
@@ -237,6 +238,7 @@ class DraftModuleStore(MongoModuleStore):
 
         draft = self.get_item(location)
 
+        print "setting published_date"
         draft.published_date = datetime.now(UTC)
         draft.published_by = published_by_id
         if draft.has_children:

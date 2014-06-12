@@ -375,7 +375,7 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
         """
         Checks if the given block has unpublished changes
         :param usage_key: the block to check
-        :return: True if the block has unpublished changes
+        :return: True if the draft and published versions differ
         """
         draft = self.get_item(usage_key.for_branch("draft"))
         try:

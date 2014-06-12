@@ -834,7 +834,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
         return xmodule
 
     def create_and_save_xmodule(self, location, definition_data=None, metadata=None, system=None,
-                                fields={}):
+                                fields={}, user_id=None):
         """
         Create the new xmodule and save it. Does not return the new module because if the caller
         will insert it as a child, it's inherited metadata will completely change. The difference
@@ -845,6 +845,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
         :param definition_data: can be empty. The initial definition_data for the kvs
         :param metadata: can be empty, the initial metadata for the kvs
         :param system: if you already have an xblock from the course, the xblock.runtime value
+        :param user_id: the user that created the xblock
         """
         # differs from split mongo in that I believe most of this logic should be above the persistence
         # layer but added it here to enable quick conversion. I'll need to reconcile these.
@@ -864,7 +865,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
                     url_slug=new_object.scope_ids.usage_id.name,
                 )
             )
-            self.update_item(course)
+            self.update_item(course, user_id=user_id)
 
         return new_object
 
@@ -910,6 +911,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
         allow_not_found: whether to create a new object if one didn't already exist or give an error
         force: force is meaningless for this modulestore
         """
+        print "has published_date " + str(hasattr(xblock, 'published_date'))
         try:
             definition_data = self._convert_reference_fields_to_strings(xblock, xblock.get_explicitly_set_fields_by_scope())
             payload = {

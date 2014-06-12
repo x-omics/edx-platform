@@ -479,7 +479,7 @@ class TestMongoModuleStore(unittest.TestCase):
         dummy_user = 123
 
         # Create a dummy component to test against
-        self.draft_store.create_and_save_xmodule(location)
+        self.draft_store.create_and_save_xmodule(location, user_id=dummy_user)
 
         # Not yet published, so changes are present
         self.assertTrue(self.draft_store.has_changes(location))
@@ -498,26 +498,28 @@ class TestMongoModuleStore(unittest.TestCase):
         self.draft_store.publish(location, dummy_user)
         self.assertFalse(self.draft_store.has_changes(location))
 
-    def test_update_edited_on(self):
+    def test_update_edit_info(self):
         """
-        Tests that edited_on is set correctly during an update
+        Tests that edited_on and edited_by are set correctly during an update
         """
         location = Location('edX', 'editInfoTest', '2012_Fall', 'html', 'test_html')
         dummy_user = 123
 
         # Create a dummy component to test against
-        self.draft_store.create_and_save_xmodule(location)
+        self.draft_store.create_and_save_xmodule(location, user_id=dummy_user)
 
         # Store the current edit time
         component = self.draft_store.get_item(location)
         old_edited_on = component.edited_on
 
-        # Change the component, then store the new edit time
+        # Change the component
         component.display_name = component.display_name + ' Changed'
         self.draft_store.update_item(component, dummy_user)
-        new_edited_on = self.draft_store.get_item(location).edited_on
+        updated_component = self.draft_store.get_item(location)
 
-        self.assertLess(old_edited_on, new_edited_on)
+        # Verify the ordering of edit times and that dummy_user made the edit
+        self.assertLess(old_edited_on, updated_component.edited_on)
+        self.assertEqual(updated_component.edited_by, dummy_user)
 
 
 class TestMongoKeyValueStore(object):
