@@ -761,6 +761,11 @@
         @include clearfix();
         position: relative;
 
+        .title {
+          margin-top: ($baseline/2);
+          font-weight: 600;
+        }
+
         .field {
 
           input {
@@ -768,17 +773,7 @@
           }
 
           .tip {
-            @include transition(opacity $tmg-f1 ease-in-out 0s);
-            opacity: 0.0;
-            position: absolute;
-            bottom: ($baseline*1.25);
-          }
-
-          input:focus {
-
-            & + .tip {
-              opacity: 1.0;
-            }
+            color: $gray-l1;
           }
 
           input.error {
