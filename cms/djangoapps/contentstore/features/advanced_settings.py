@@ -65,6 +65,8 @@ def i_see_default_advanced_settings(step):
 
 @step('the settings are alphabetized$')
 def they_are_alphabetized(step):
+    # Blanks strings are returned for hidden settings, and that messes up the sorting.
+    step.given("I toggle the display of deprecated settings")
     key_elements = world.css_find(KEY_CSS)
     all_keys = []
     for key in key_elements:
@@ -102,15 +104,17 @@ def the_policy_key_value_is_changed(step):
 def verify_deprecated_settings_shown(_step, expected):
     for setting in DEPRECATED_SETTINGS:
         index = get_index_of(setting)
+        advanced_policy_css = ".course-advanced-policy-list-item"
         if expected == "not":
-            assert_equal(-1, index)
+            assert not world.css_visible(advanced_policy_css, index)
         else:
-            assert_not_equal(-1, index)
+            world.wait_for_visible(advanced_policy_css, index)
+            assert world.css_visible(advanced_policy_css, index)
 
 
 @step(u'I toggle the display of deprecated settings$')
 def toggle_deprecated_settings(_step):
-    world.css_click("#deprecated-settings")
+    world.css_click(".deprecated-settings-label")
 
 
 def assert_policy_entries(expected_keys, expected_values):

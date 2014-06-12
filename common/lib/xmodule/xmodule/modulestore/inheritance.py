@@ -39,8 +39,8 @@ class InheritanceMixin(XBlockMixin):
         scope=Scope.settings
     )
     due = Date(
-        display_name=_("Due Date"),  # TODO: due display name not showing up properly
-        help=_("Date that this problem is due by"), # TODO: We probably shouldn't show this in Advanced Settings. Why would you want a course-wide due date?
+        display_name=_("Due Date"),
+        help=_("Date that this problem is due by"),
         scope=Scope.settings,
     )
     extended_due = Date(
