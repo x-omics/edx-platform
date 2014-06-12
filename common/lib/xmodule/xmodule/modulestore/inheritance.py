@@ -11,6 +11,9 @@ from xblock.runtime import KeyValueStore, KvsFieldData
 
 from xmodule.fields import Date, Timedelta
 
+# Make '_' a no-op so we can scrape strings
+_ = lambda text: text
+
 
 class UserPartitionList(List):
     """Special List class for listing UserPartitions"""
@@ -36,7 +39,8 @@ class InheritanceMixin(XBlockMixin):
         scope=Scope.settings
     )
     due = Date(
-        help="Date that this problem is due by",
+        display_name=_("Due Date"),  # TODO: due display name not showing up properly
+        help=_("Date that this problem is due by"), # TODO: We probably shouldn't show this in Advanced Settings. Why would you want a course-wide due date?
         scope=Scope.settings,
     )
     extended_due = Date(
@@ -44,72 +48,98 @@ class InheritanceMixin(XBlockMixin):
              "can be set by an instructor, and will override the global due "
              "date if it is set to a date that is later than the global due "
              "date.",
-        default=None,
-        scope=Scope.user_state,
+        default=None
     )
     course_edit_method = String(
-        help="Method with which this course is edited.",
-        default="Studio", scope=Scope.settings
+        display_name=_("Course Editor"),
+        help=_("Method with which this course is edited ('XML' or 'Studio')."),
+        default="Studio",
+        scope=Scope.settings,
+        deprecated=True  # Deprecated because user would not change away from Studio within Studio.
     )
     giturl = String(
-        help="url root for course data git repository",
+        display_name=_("GIT URL"),
+        help=_("Url root for course data git repository"),
         scope=Scope.settings,
+        deprecated=True  # Deprecated because GIT workflow users do not use Studio.
     )
-    xqa_key = String(help="DO NOT USE", scope=Scope.settings)
-    annotation_storage_url = String(help="Location of Annotation backend", scope=Scope.settings, default="http://your_annotation_storage.com", display_name="Url for Annotation Storage")
-    annotation_token_secret = String(help="Secret string for annotation storage", scope=Scope.settings, default="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", display_name="Secret Token String for Annotation")
+    xqa_key = String(
+        display_name=_("XQA Key"),
+        help=_("For integration with Ike's content QA server. NOTE: this property is not supported."), scope=Scope.settings,
+        deprecated=True
+    )
+    annotation_storage_url = String(
+        help=_("Location of Annotation backend (used by 'textannotation', 'videoannotation', and 'imageannotation' advanced modules)."),
+        scope=Scope.settings,
+        default="http://your_annotation_storage.com",
+        display_name=_("Url for Annotation Storage")
+    )
+    annotation_token_secret = String(
+        help=_("Secret string for annotation storage (used by 'textannotation', 'videoannotation', and 'imageannotation' advanced modules)."),
+        scope=Scope.settings,
+        default="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+        display_name=_("Secret Token String for Annotation")
+    )
     graceperiod = Timedelta(
         help="Amount of time after the due date that submissions will be accepted",
         scope=Scope.settings,
     )
     showanswer = String(
-        help="When to show the problem answer to the student",
+        display_name=_("Show Answer"),
+        help=_("Defines when to show the answer to the problem."),
         scope=Scope.settings,
         default="finished",
     )
     rerandomize = String(
-        help="When to rerandomize the problem",
+        display_name=_("Randomization"),
+        help=_("Defines how often inputs are randomized when a student loads the problem. "
+               "This setting only applies to problems that can have randomly generated numeric values. "),
         scope=Scope.settings,
         default="never",
     )
     days_early_for_beta = Float(
-        help="Number of days early to show content to beta users",
+        display_name=_("Days Early for Beta Users"),
+        help=_("Number of days early to show content to beta users"),
         scope=Scope.settings,
         default=None,
     )
     static_asset_path = String(
-        help="Path to use for static assets - overrides Studio c4x://",
+        display_name=_("Static Asset Path"),
+        help=_("Path to use for static assets - overrides Studio c4x://"),
         scope=Scope.settings,
         default='',
     )
     text_customization = Dict(
-        help="String customization substitutions for particular locations",
+        display_name=_("Text Customization"),
+        help=_("String customization substitutions for particular locations"),
         scope=Scope.settings,
     )
     use_latex_compiler = Boolean(
-        help="Enable LaTeX templates?",
+        display_name=_("Enable LaTeX Compiler"),
+        help=_("Enables LaTeX templates for Advanced Problems and HTML"),
         default=False,
         scope=Scope.settings
     )
     max_attempts = Integer(
-        display_name="Maximum Attempts",
-        help=("Defines the number of times a student can try to answer this problem. "
-              "If the value is not set, infinite attempts are allowed."),
+        display_name=_("Maximum Attempts"),
+        help=_("Defines the number of times a student can try to answer this problem. "
+               "If the value is not set, infinite attempts are allowed."),
         values={"min": 0}, scope=Scope.settings
     )
     matlab_api_key = String(
-        display_name="Matlab API key",
-        help="Enter the API key provided by MathWorks for accessing the MATLAB Hosted Service. "
-             "This key is granted for exclusive use by this course for the specified duration. "
-             "Please do not share the API key with other courses and notify MathWorks immediately "
-             "if you believe the key is exposed or compromised. To obtain a key for your course, "
-             "or to report and issue, please contact moocsupport@mathworks.com",
+        display_name=_("Matlab API key"),
+        help=_("Enter the API key provided by MathWorks for accessing the MATLAB Hosted Service. "
+               "This key is granted for exclusive use by this course for the specified duration. "
+               "Please do not share the API key with other courses and notify MathWorks immediately "
+               "if you believe the key is exposed or compromised. To obtain a key for your course, "
+               "or to report and issue, please contact moocsupport@mathworks.com"),
         scope=Scope.settings
     )
     # This is should be scoped to content, but since it's defined in the policy
     # file, it is currently scoped to settings.
     user_partitions = UserPartitionList(
-        help="The list of group configurations for partitioning students in content experiments.",
+        display_name=_("Experiment Group Configurations"),
+        help=_("The list of group configurations for partitioning students in content experiments."),
         default=[],
         scope=Scope.settings
     )

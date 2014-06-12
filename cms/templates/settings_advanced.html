@@ -33,6 +33,13 @@ require(["domReady!", "jquery", "js/models/settings/advanced", "js/views/setting
     model: advancedModel
   });
   editor.render();
+
+  $("#deprecated-settings").click(function() {
+      var $this = $(this);
+      editor.render_deprecated = $this.is(':checked');
+      editor.render();
+  });
+
 });
 
 </script>
@@ -68,6 +75,8 @@ require(["domReady!", "jquery", "js/models/settings/advanced", "js/views/setting
           </header>
 
           <p class="instructions">${_("<strong>Warning</strong>: Do not modify these policies unless you are familiar with their purpose.")}</p>
+
+          <input id="deprecated-settings" type="checkbox" name="Show Deprecated">Show Deprecated Settings<br>
 
           <ul class="list-input course-advanced-policy-list enum">
 

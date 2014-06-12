@@ -495,21 +495,6 @@ class CourseMetadataEditingTest(CourseTestCase):
         self.assertIn('days_early_for_beta', test_model, 'Missing days_early_for_beta metadata field')
         self.assertEqual(test_model['days_early_for_beta'], 2, "days_early_for_beta not expected value")
 
-    def test_delete_key(self):
-        test_model = CourseMetadata.update_from_json(
-            self.fullcourse,
-            {"unsetKeys": ['showanswer', 'xqa_key']},
-            user=self.user
-        )
-        # ensure no harm
-        self.assertNotIn('graceperiod', test_model, 'blacklisted field leaked in')
-        self.assertIn('display_name', test_model, 'full missing editable metadata field')
-        self.assertEqual(test_model['display_name'], 'Robot Super Course', "not expected value")
-        self.assertIn('rerandomize', test_model, 'Missing rerandomize metadata field')
-        # check for deletion effectiveness
-        self.assertEqual('finished', test_model['showanswer'], 'showanswer field still in')
-        self.assertEqual(None, test_model['xqa_key'], 'xqa_key field still in')
-
     def test_http_fetch_initial_fields(self):
         response = self.client.get_json(self.course_setting_url)
         test_model = json.loads(response.content)
@@ -530,12 +515,9 @@ class CourseMetadataEditingTest(CourseTestCase):
             "advertised_start": "start A",
             "testcenter_info": {"c": "test"},
             "days_early_for_beta": 2,
-            "unsetKeys": ['showanswer', 'xqa_key'],
         })
         test_model = json.loads(response.content)
         self.update_check(test_model)
-        self.assertEqual('finished', test_model['showanswer'], 'showanswer field still in')
-        self.assertEqual(None, test_model['xqa_key'], 'xqa_key field still in')
 
         response = self.client.get_json(self.course_setting_url)
         test_model = json.loads(response.content)

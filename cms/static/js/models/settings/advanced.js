@@ -4,6 +4,7 @@ var Advanced = Backbone.Model.extend({
 
     defaults: {
         // the properties are whatever the user types in (in addition to whatever comes originally from the server)
+        // TODO: document-- this is a single model for all advanced settings (each of which has several different properties)
     },
 
     validate: function (attrs) {

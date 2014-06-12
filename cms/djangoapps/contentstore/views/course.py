@@ -631,8 +631,7 @@ def advanced_settings_handler(request, course_key_string):
         json: get the model
     PUT, POST
         json: update the Course's settings. The payload is a json rep of the
-            metadata dicts. The dict can include a "unsetKeys" entry which is a list
-            of keys whose values to unset: i.e., revert to default
+            metadata dicts.
     """
     course_key = CourseKey.from_string(course_key_string)
     course_module = _get_course_module(course_key, request.user)
