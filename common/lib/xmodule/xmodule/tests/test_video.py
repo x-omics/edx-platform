@@ -476,7 +476,7 @@ class VideoDescriptorImportTestCase(unittest.TestCase):
         })
 
 
-class VideoExportTestCase(VideoDescriptorTest):
+class VideoExportTestCase(VideoDescriptorTestBase):
     """
     Make sure that VideoDescriptor can export itself to XML correctly.
     """
