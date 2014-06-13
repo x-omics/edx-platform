@@ -130,7 +130,7 @@ class VideoDescriptorTestBase(unittest.TestCase):
         self.descriptor = instantiate_descriptor()
 
 
-class TestCreateYoutubeString(TestVideoDescriptor):
+class TestCreateYoutubeString(VideoDescriptorTestBase):
     """
     Checks that create_youtube_string correcty extracts information from Video descriptor.
     """
