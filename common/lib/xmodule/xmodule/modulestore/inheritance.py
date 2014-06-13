@@ -40,7 +40,7 @@ class InheritanceMixin(XBlockMixin):
     )
     due = Date(
         display_name=_("Due Date"),
-        help=_("Date that this problem is due by"),
+        help=_("Date that a problem is due by"),
         scope=Scope.settings,
     )
     extended_due = Date(

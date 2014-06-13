@@ -27,7 +27,6 @@ class CourseMetadata(object):
                      'pdf_textbooks',
                      'name',  # from xblock
                      'tags',  # from xblock
-                     'due'
     ]
 
     @classmethod
@@ -64,8 +63,6 @@ class CourseMetadata(object):
 
         Ensures none of the fields are in the blacklist.
         """
-        dirty = False
-
         # Copy the filtered list to avoid permanently changing the class attribute.
         filtered_list = list(cls.FILTERED_LIST)
         # Don't filter on the tab attribute if filter_tabs is False.
