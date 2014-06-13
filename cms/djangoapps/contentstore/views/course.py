@@ -6,6 +6,7 @@ import random
 import string  # pylint: disable=W0402
 
 from django.utils.translation import ugettext as _
+import django.utils
 from django.contrib.auth.decorators import login_required
 from django_future.csrf import ensure_csrf_cookie
 from django.conf import settings
@@ -646,9 +647,9 @@ def advanced_settings_handler(request, course_key_string):
         if request.method == 'GET':
             return JsonResponse(CourseMetadata.fetch(course_module))
         else:
-            # Whether or not to filter the tabs key out of the settings metadata
-            filter_tabs = _config_course_advanced_components(request, course_module)
             try:
+                # Whether or not to filter the tabs key out of the settings metadata
+                filter_tabs = _config_course_advanced_components(request, course_module)
                 return JsonResponse(CourseMetadata.update_from_json(
                     course_module,
                     request.json,
@@ -657,7 +658,7 @@ def advanced_settings_handler(request, course_key_string):
                 ))
             except (TypeError, ValueError) as err:
                 return HttpResponseBadRequest(
-                    "Incorrect setting format. {}".format(err),
+                    django.utils.html.escape(err.message),
                     content_type="text/plain"
                 )
 

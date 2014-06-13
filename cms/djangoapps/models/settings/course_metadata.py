@@ -2,6 +2,7 @@ from xblock.fields import Scope
 
 from contentstore.utils import get_modulestore
 from cms.lib.xblock.mixin import CmsBlockMixin
+from django.utils.translation import ugettext as _
 
 
 class CourseMetadata(object):
@@ -71,18 +72,25 @@ class CourseMetadata(object):
         if not filter_tabs:
             filtered_list.remove("tabs")
 
+        # Validate the values before actually setting them.
+        key_values = {}
+
         for key, model in jsondict.iteritems():
             # should it be an error if one of the filtered list items is in the payload?
             if key in filtered_list:
                 continue
+            try:
+                val = model['value']
+                if hasattr(descriptor, key) and getattr(descriptor, key) != val:
+                    key_values[key] = descriptor.fields[key].from_json(val)
+            except (TypeError, ValueError) as err:
+                raise ValueError(_("Incorrect format for field '{name}'. {detailed_message}".format(
+                    name=model['display_name'], detailed_message=err.message)))
 
-            val = model['value']
-            if hasattr(descriptor, key) and getattr(descriptor, key) != val:
-                dirty = True
-                value = descriptor.fields[key].from_json(val)
-                setattr(descriptor, key, value)
+        for key, value in key_values.iteritems():
+            setattr(descriptor, key, value)
 
-        if dirty:
+        if len(key_values) > 0:
             get_modulestore(descriptor.location).update_item(descriptor, user.id if user else None)
 
         return cls.fetch(descriptor)
