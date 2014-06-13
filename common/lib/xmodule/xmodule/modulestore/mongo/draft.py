@@ -166,6 +166,8 @@ class DraftModuleStore(MongoModuleStore):
                 _internal_depth_first(child_entry)
 
             root['_id']['revision'] = DRAFT
+            # ensure keys are in fixed and right order before inserting
+            root['_id'] = self._id_dict_to_son(root['_id'])
             try:
                 self.collection.insert(root)
             except pymongo.errors.DuplicateKeyError:
@@ -269,13 +271,16 @@ class DraftModuleStore(MongoModuleStore):
             """
             for rev_func in as_functions:
                 current_loc = rev_func(current_loc)
-                current_entry = self.collection.find_one({'_id': current_loc.to_deprecated_son()})
+                current_son = current_loc.to_deprecated_son()
+                current_entry = self.collection.find_one({'_id': current_son})
                 if current_entry is None:
                     continue  # already deleted or not in this version
                 for child_loc in current_entry.get('definition', {}).get('children', []):
                     child_loc = current_loc.course_key.make_usage_key_from_deprecated_string(child_loc)
                     _internal_depth_first(child_loc)
-                self.collection.remove({'_id': current_entry['_id']}, safe=self.collection.safe)
+                # if deleting both pub and draft and this is direct cat, it will go away
+                # in first iteration, but that's ok as all of its children are already gone
+                self.collection.remove({'_id': current_son}, safe=self.collection.safe)
 
         _internal_depth_first(location)
         # recompute (and update) the metadata inheritance tree which is cached

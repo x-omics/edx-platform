@@ -91,7 +91,7 @@ class CourseTestCase(ModuleStoreTestCase):
             number='999',
             display_name='Robot Super Course',
         )
-        self.store = get_modulestore(self.course.location)
+        self.store = modulestore()
 
     def create_non_staff_authed_user_client(self, authenticate=True):
         """

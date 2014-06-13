@@ -137,7 +137,7 @@ def xml_only_video(step):
     world.wait(1)
 
     course = world.scenario_dict['COURSE']
-    store = get_modulestore(course.location)
+    store = modulestore()
 
     parent_location = store.get_items(course.id, category='vertical')[0].location
 

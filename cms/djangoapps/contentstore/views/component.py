@@ -394,7 +394,7 @@ def _get_item_in_course(request, usage_key):
         raise PermissionDenied()
 
     course = modulestore().get_course(course_key)
-    item = get_modulestore(usage_key).get_item(usage_key, depth=1)
+    item = modulestore().get_item(usage_key, depth=1)
     lms_link = get_lms_link_for_item(usage_key)
 
     return course, item, lms_link
@@ -417,7 +417,7 @@ def component_handler(request, usage_key_string, handler, suffix=''):
 
     usage_key = UsageKey.from_string(usage_key_string)
 
-    descriptor = get_modulestore(usage_key).get_item(usage_key)
+    descriptor = modulestore().get_item(usage_key)
     # Let the module handle the AJAX
     req = django_to_webob_request(request)
 
@@ -430,6 +430,6 @@ def component_handler(request, usage_key_string, handler, suffix=''):
 
     # unintentional update to handle any side effects of handle call; so, request user didn't author
     # the change
-    get_modulestore(usage_key).update_item(descriptor, None)
+    modulestore().update_item(descriptor, None)
 
     return webob_to_django_response(resp)

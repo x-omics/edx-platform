@@ -179,7 +179,7 @@ def xblock_view_handler(request, usage_key_string, view_name):
     accept_header = request.META.get('HTTP_ACCEPT', 'application/json')
 
     if 'application/json' in accept_header:
-        store = get_modulestore(usage_key)
+        store = modulestore()
         xblock = store.get_item(usage_key)
         is_read_only = _is_xblock_read_only(xblock)
         container_views = ['container_preview', 'reorderable_container_child_preview']
@@ -274,7 +274,7 @@ def _save_item(request, usage_key, data=None, children=None, metadata=None, null
     nullout means to truly set the field to None whereas nones in metadata mean to unset them (so they revert
     to default).
     """
-    store = get_modulestore(usage_key)
+    store = modulestore()
 
     try:
         existing_item = store.get_item(usage_key)
@@ -392,7 +392,7 @@ def _create_item(request):
     if not has_course_access(request.user, usage_key.course_key):
         raise PermissionDenied()
 
-    modulestore = get_modulestore(category)
+    modulestore = modulestore()
     parent = modulestore.get_item(usage_key)
     dest_usage_key = usage_key.replace(category=category, name=uuid4().hex)
 
@@ -416,7 +416,7 @@ def _create_item(request):
         request.user.id,
         definition_data=data,
         metadata=metadata,
-        system=parent.runtime,
+        runtime=parent.runtime,
     )
 
     # VS[compat] cdodge: This is a hack because static_tabs also have references from the course module, so
@@ -435,7 +435,7 @@ def _create_item(request):
     # TODO replace w/ nicer accessor
     if not 'detached' in parent.runtime.load_block_type(category)._class_tags:
         parent.children.append(dest_usage_key)
-        get_modulestore(parent.location).update_item(parent, request.user.id)
+        modulestore().update_item(parent, request.user.id)
 
     return JsonResponse({"locator": unicode(dest_usage_key), "courseKey": unicode(dest_usage_key.course_key)})
 
@@ -444,7 +444,7 @@ def _duplicate_item(parent_usage_key, duplicate_source_usage_key, display_name=N
     """
     Duplicate an existing xblock as a child of the supplied parent_usage_key.
     """
-    store = get_modulestore(duplicate_source_usage_key)
+    store = modulestore()
     source_item = store.get_item(duplicate_source_usage_key)
     # Change the blockID to be unique.
     dest_usage_key = duplicate_source_usage_key.replace(name=uuid4().hex)
@@ -460,12 +460,12 @@ def _duplicate_item(parent_usage_key, duplicate_source_usage_key, display_name=N
         else:
             duplicate_metadata['display_name'] = _("Duplicate of '{0}'").format(source_item.display_name)
 
-    dest_module = get_modulestore(category).create_and_save_xmodule(
+    dest_module = modulestore().create_and_save_xmodule(
         dest_usage_key,
         user.id,
-        definition_data=source_item.data if hasattr(source_item, 'data') else None,
+        definition_data=source_item.get_explicitly_set_fields_by_scope(Scope.content),
         metadata=duplicate_metadata,
-        system=source_item.runtime,
+        runtime=source_item.runtime,
     )
 
     # Children are not automatically copied over (and not all xblocks have a 'children' attribute).
@@ -475,10 +475,10 @@ def _duplicate_item(parent_usage_key, duplicate_source_usage_key, display_name=N
         for child in source_item.children:
             dupe = _duplicate_item(dest_usage_key, child, user=user)
             dest_module.children.append(dupe)
-        get_modulestore(dest_usage_key).update_item(dest_module, user.id if user else None)
+        modulestore().update_item(dest_module, user.id if user else None)
 
     if not 'detached' in source_item.runtime.load_block_type(category)._class_tags:
-        parent = get_modulestore(parent_usage_key).get_item(parent_usage_key)
+        parent = modulestore().get_item(parent_usage_key)
         # If source was already a child of the parent, add duplicate immediately afterward.
         # Otherwise, add child to end.
         if duplicate_source_usage_key in parent.children:
@@ -486,7 +486,7 @@ def _duplicate_item(parent_usage_key, duplicate_source_usage_key, display_name=N
             parent.children.insert(source_index + 1, dest_usage_key)
         else:
             parent.children.append(dest_usage_key)
-        get_modulestore(parent_usage_key).update_item(parent, user.id if user else None)
+        modulestore().update_item(parent, user.id if user else None)
 
     return dest_usage_key
 
@@ -525,7 +525,7 @@ def _get_module_info(usage_key, request, rewrite_static_links=True):
     metadata, data, id representation of a leaf module fetcher.
     :param usage_key: A UsageKey
     """
-    store = get_modulestore(usage_key)
+    store = modulestore()
     try:
         module = store.get_item(usage_key)
     except ItemNotFoundError:

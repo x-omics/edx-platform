@@ -21,7 +21,7 @@ class ChecklistTestCase(CourseTestCase):
 
     def get_persisted_checklists(self):
         """ Returns the checklists as persisted in the modulestore. """
-        modulestore = get_modulestore(self.course.location)
+        modulestore = modulestore()
         return modulestore.get_item(self.course.location).checklists
 
     def compare_checklists(self, persisted, request):
@@ -54,7 +54,7 @@ class ChecklistTestCase(CourseTestCase):
         self.course.checklists = None
         # Save the changed `checklists` to the underlying KeyValueStore before updating the modulestore
         self.course.save()
-        modulestore = get_modulestore(self.course.location)
+        modulestore = modulestore()
         modulestore.update_item(self.course, self.user.id)
         self.assertEqual(self.get_persisted_checklists(), None)
         response = self.client.get(self.checklists_url)

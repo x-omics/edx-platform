@@ -86,7 +86,7 @@ class SplitWMongoCourseBoostrapper(unittest.TestCase):
             mongo = self.old_mongo
         else:
             mongo = self.draft_mongo
-        mongo.create_and_save_xmodule(location, data, metadata, self.runtime)
+        mongo.create_and_save_xmodule(location, self.userid, definition_data=data, metadata=metadata, runtime=self.runtime)
         if isinstance(data, basestring):
             fields = {'data': data}
         else:

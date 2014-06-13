@@ -335,7 +335,7 @@ class CourseGradingTest(CourseTestCase):
 
     def test_update_section_grader_type(self):
         # Get the descriptor and the section_grader_type and assert they are the default values
-        descriptor = get_modulestore(self.course.location).get_item(self.course.location)
+        descriptor = modulestore().get_item(self.course.location)
         section_grader_type = CourseGradingModel.get_section_grader_type(self.course.location)
 
         self.assertEqual('notgraded', section_grader_type['graderType'])
@@ -344,7 +344,7 @@ class CourseGradingTest(CourseTestCase):
 
         # Change the default grader type to Homework, which should also mark the section as graded
         CourseGradingModel.update_section_grader_type(self.course, 'Homework', self.user)
-        descriptor = get_modulestore(self.course.location).get_item(self.course.location)
+        descriptor = modulestore().get_item(self.course.location)
         section_grader_type = CourseGradingModel.get_section_grader_type(self.course.location)
 
         self.assertEqual('Homework', section_grader_type['graderType'])
@@ -353,7 +353,7 @@ class CourseGradingTest(CourseTestCase):
 
         # Change the grader type back to notgraded, which should also unmark the section as graded
         CourseGradingModel.update_section_grader_type(self.course, 'notgraded', self.user)
-        descriptor = get_modulestore(self.course.location).get_item(self.course.location)
+        descriptor = modulestore().get_item(self.course.location)
         section_grader_type = CourseGradingModel.get_section_grader_type(self.course.location)
 
         self.assertEqual('notgraded', section_grader_type['graderType'])
@@ -414,7 +414,7 @@ class CourseGradingTest(CourseTestCase):
         """
         self.populate_course()
         sequential_usage_key = self.course.id.make_usage_key("sequential", None)
-        sections = get_modulestore(self.course.id).get_items(sequential_usage_key)
+        sections = modulestore().get_items(sequential_usage_key)
         # see if test makes sense
         self.assertGreater(len(sections), 0, "No sections found")
         section = sections[0]  # just take the first one

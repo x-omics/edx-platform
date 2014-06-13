@@ -740,7 +740,7 @@ def textbooks_list_handler(request, course_key_string):
     """
     course_key = CourseKey.from_string(course_key_string)
     course = _get_course_module(course_key, request.user)
-    store = get_modulestore(course.location)
+    store = modulestore()
 
     if not "application/json" in request.META.get('HTTP_ACCEPT', 'text/html'):
         # return HTML page
@@ -815,7 +815,7 @@ def textbooks_detail_handler(request, course_key_string, textbook_id):
     """
     course_key = CourseKey.from_string(course_key_string)
     course_module = _get_course_module(course_key, request.user)
-    store = get_modulestore(course_module.location)
+    store = modulestore()
     matching_id = [tb for tb in course_module.pdf_textbooks
                    if unicode(tb.get("id")) == unicode(textbook_id)]
     if matching_id:

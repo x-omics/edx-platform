@@ -12,6 +12,8 @@ from django.core.cache import get_cache, InvalidCacheBackendError
 import django.utils
 
 from xmodule.modulestore.loc_mapper_store import LocMapperStore
+from xmodule.modulestore.branch_setting import BranchSetting
+import xmodule.modulestore
 
 # We may not always have the request_cache module available
 try:
@@ -153,3 +155,15 @@ class ModuleI18nService(object):
         # then Cale was a liar.
         from util.date_utils import strftime_localized
         return strftime_localized(*args, **kwargs)
+
+
+# override the definition in the module's init
+def get_settings_attr(attr, default=None):
+    """
+    A standin for getattr(settings..) but doesn't require caller to import settings.
+    :param attr:
+    :param default:
+    """
+    return getattr(settings, attr, default)
+
+xmodule.modulestore.get_settings_attr = get_settings_attr

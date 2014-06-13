@@ -683,6 +683,16 @@ class MongoModuleStore(ModuleStoreWriteBase):
             ('_id.course', course_id.course),
         ])
 
+    @staticmethod
+    def _id_dict_to_son(id_dict):
+        """
+        Generate the partial key to look up items relative to a given course
+        """
+        return SON([
+            (key, id_dict[key])
+            for key in ('tag', 'org', 'course', 'category', 'name', 'revision')
+        ])
+
     def get_items(self, course_id, settings=None, content=None, revision=None, **kwargs):
         """
         Returns:
@@ -962,13 +972,16 @@ class MongoModuleStore(ModuleStoreWriteBase):
             )
         ]
 
-    def get_modulestore_type(self):
+    def get_modulestore_type(self, course_key=None):
         """
         Returns an enumeration-like type reflecting the type of this modulestore
         The return can be one of:
         "xml" (for XML based courses),
         "mongo" for old-style MongoDB backed courses,
         "split" for new-style split MongoDB backed courses.
+
+        Args:
+            course_key: just for signature compatibility
         """
         return MONGO_MODULESTORE_TYPE
 

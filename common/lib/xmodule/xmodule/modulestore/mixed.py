@@ -83,7 +83,7 @@ class MixedModuleStore(ModuleStoreWriteBase):
                 return mapping
             else:
                 for store in self.modulestores:
-                    if store.has_course(course_id):
+                    if isinstance(course_id, store.reference_type) and store.has_course(course_id):
                         self.mappings[course_id] = store
                         return store
 
@@ -357,23 +357,6 @@ class MixedModuleStore(ModuleStoreWriteBase):
             return store.create_xmodule(location, definition_data, metadata, system, fields)
         else:
             raise NotImplementedError(u"Cannot create_xmodule on store {}".format(store))
-
-    def create_and_save_xmodule(self, location, user_id, definition_data=None, metadata=None, system=None, fields={}):
-        """
-        Create the new xmodule and save it. Does not return the new module because if the caller
-        will insert it as a child, it's inherited metadata will completely change. The difference
-        between this and just doing create_xmodule and update_item is this ensures static_tabs get
-        pointed to by the course.
-
-        :param location: a Location--must have a category
-        :param definition_data: can be empty. The initial definition_data for the kvs
-        :param metadata: can be empty, the initial metadata for the kvs
-        :param system: if you already have an xblock from the course, the xblock.runtime value
-        """
-        # let create_xmodule do the is implemented check
-        new_object = self.create_xmodule(location, definition_data, metadata, system, fields)
-        self.update_item(new_object, user_id, allow_not_found=True)
-        return new_object
 
     def get_courses_for_wiki(self, wiki_slug):
         """

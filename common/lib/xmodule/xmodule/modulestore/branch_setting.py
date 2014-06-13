@@ -5,7 +5,7 @@ This file contains functionality for determining the branch to use on a particul
 import re
 import threading
 from xmodule.util.django import get_current_request_hostname
-from django import settings
+from xmodule.modulestore import get_settings_attr
 
 class BranchSetting(object):
     """
@@ -58,7 +58,7 @@ class BranchSetting(object):
 
         if hostname:
             # get mapping information which is defined in configurations
-            mappings = getattr(settings, 'HOSTNAME_MODULESTORE_DEFAULT_MAPPINGS', None)
+            mappings = get_settings_attr('HOSTNAME_MODULESTORE_DEFAULT_MAPPINGS', None)
 
             # compare hostname against the regex expressions set of mappings which will tell us which branch to use
             if mappings:
@@ -73,4 +73,4 @@ class BranchSetting(object):
         """
         Returns the branch value from the configuration settings
         """
-        return settings.MODULESTORE_BRANCH
+        return get_settings_attr('MODULESTORE_BRANCH', 'published')

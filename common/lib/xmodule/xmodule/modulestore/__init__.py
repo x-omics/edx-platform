@@ -433,6 +433,23 @@ class ModuleStoreWriteBase(ModuleStoreReadBase, ModuleStoreWrite):
         """
         raise NotImplementedError
 
+    def create_and_save_xmodule(self, location, user_id, definition_data=None, metadata=None, runtime=None, fields={}):
+        """
+        Create the new xmodule and save it. Does not return the new module because if the caller
+        will insert it as a child, it's inherited metadata will completely change. The difference
+        between this and just doing create_xmodule and update_item is this ensures static_tabs get
+        pointed to by the course.
+
+        :param location: a Location--must have a category
+        :param definition_data: can be empty. The initial definition_data for the kvs
+        :param metadata: can be empty, the initial metadata for the kvs
+        :param runtime: if you already have an xblock from the course, the xblock.runtime value
+        """
+        # let create_xmodule do the is implemented check
+        new_object = self.create_xmodule(location, definition_data, metadata, runtime, fields)
+        self.update_item(new_object, user_id, allow_not_found=True)
+        return new_object
+
 
 def only_xmodules(identifier, entry_points):
     """Only use entry_points that are supplied by the xmodule package"""
@@ -448,3 +465,14 @@ def prefer_xmodules(identifier, entry_points):
         return default_select(identifier, from_xmodule)
     else:
         return default_select(identifier, entry_points)
+
+
+def default_get_settings_attr(attr, default=None):
+    """
+    The default implementation of django.get_settings_attr which should only be used if not using django.
+    Acts like getattr on settings. This just returns the default.
+    """
+    return default
+
+
+get_settings_attr = default_get_settings_attr

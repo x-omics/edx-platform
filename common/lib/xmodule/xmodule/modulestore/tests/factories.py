@@ -140,6 +140,7 @@ class ItemFactory(XModuleFactory):
         display_name = kwargs.pop('display_name', None)
         metadata = kwargs.pop('metadata', {})
         location = kwargs.pop('location')
+        user_id = kwargs.pop('user_id', 999)
 
         assert isinstance(location, Location)
         assert location != parent_location
@@ -161,7 +162,8 @@ class ItemFactory(XModuleFactory):
         # replace the display name with an optional parameter passed in from the caller
         if display_name is not None:
             metadata['display_name'] = display_name
-        store.create_and_save_xmodule(location, '**replace_user**', metadata=metadata, definition_data=data)
+        runtime = parent.runtime if parent else None
+        store.create_and_save_xmodule(location, user_id, metadata=metadata, definition_data=data, runtime=runtime)
 
         module = store.get_item(location)
 

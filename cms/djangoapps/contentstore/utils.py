@@ -46,14 +46,6 @@ def delete_course_and_groups(course_id, commit=False):
                 log.error("Error in deleting course groups for {0}: {1}".format(course_id, err))
 
 
-def get_modulestore(category_or_location):
-    """
-    This function no longer does anything more than just calling `modulestore()`. It used
-    to select 'direct' v 'draft' based on the category.
-    """
-    return modulestore()
-
-
 def get_lms_link_for_item(location, preview=False):
     """
     Returns an LMS link to the course with a jump_to to the provided location.

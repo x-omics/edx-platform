@@ -785,7 +785,7 @@ class XMLModuleStore(ModuleStoreReadBase):
         # here just to quell the abstractmethod. someone could write the impl if needed
         raise NotImplementedError
 
-    def get_parent_locations(self, location):
+    def get_parent_locations(self, location, **kwargs):
         '''Find all locations that are the parents of this location in this
         course.  Needed for path_to_location().
 
@@ -797,13 +797,16 @@ class XMLModuleStore(ModuleStoreReadBase):
 
         return self.parent_trackers[location.course_key].parents(location)
 
-    def get_modulestore_type(self):
+    def get_modulestore_type(self, course_key=None):
         """
         Returns an enumeration-like type reflecting the type of this modulestore
         The return can be one of:
         "xml" (for XML based courses),
         "mongo" for old-style MongoDB backed courses,
         "split" for new-style split MongoDB backed courses.
+
+        Args:
+            course_key: just for signature compatibility
         """
         return XML_MODULESTORE_TYPE
 

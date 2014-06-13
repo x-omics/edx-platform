@@ -390,7 +390,7 @@ class SplitTestDescriptor(SplitTestFields, SequenceDescriptor):
                     dest_usage_key = self.location.replace(category="vertical", name=uuid4().hex)
                     metadata = {'display_name': group.name}
                     modulestore.create_and_save_xmodule(
-                        dest_usage_key,
+                        dest_usage_key, user.id,
                         definition_data=None,
                         metadata=metadata,
                         system=self.system,

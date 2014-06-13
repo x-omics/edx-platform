@@ -15,7 +15,6 @@ from xmodule.modulestore.tests.test_location_mapper import LocMapperSetupSansDja
 # before importing the module
 from django.conf import settings
 from opaque_keys.edx.locations import SlashSeparatedCourseKey
-import bson.son
 if not settings.configured:
     settings.configure()
 from xmodule.modulestore.mixed import MixedModuleStore
@@ -254,7 +253,7 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
         # if following raised, then the test is really a noop, change it
         self.assertFalse(course.show_calculator, "Default changed making test meaningless")
         course.show_calculator = True
-        with self.assertRaises(AttributeError):  # ensure it doesn't allow writing
+        with self.assertRaises(NotImplementedError):  # ensure it doesn't allow writing
             self.store.update_item(course, None)
         # now do it for a r/w db
         course = self.store.get_course(self.course_locations[self.MONGO_COURSEID].course_key)
@@ -273,8 +272,8 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
         self.initdb(default_ms)
         # r/o try deleting the course (is here to ensure it can't be deleted)
         with self.assertRaises(NotImplementedError):
-            self.store.delete_item(self.xml_chapter_location, '**replace_user**')
-        self.store.delete_item(self.writable_chapter_location, '**replace_user**')
+            self.store.delete_item(self.xml_chapter_location, 13)
+        self.store.delete_item(self.writable_chapter_location, 9)
         # verify it's gone
         with self.assertRaises(ItemNotFoundError):
             self.store.get_item(self.writable_chapter_location)
@@ -299,7 +298,8 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
         Test that the xml modulestore only loaded the courses from the maps.
         """
         self.initdb('draft')
-        courses = self.store.modulestores['xml'].get_courses()
+        xml_store = self.store._get_modulestore_by_type(XML_MODULESTORE_TYPE)
+        courses = xml_store.get_courses()
         self.assertEqual(len(courses), 2)
         course_ids = [course.id for course in courses]
         self.assertIn(self.course_locations[self.XML_COURSEID1].course_key, course_ids)
@@ -312,8 +312,10 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
         Test that the xml modulestore doesn't allow write ops.
         """
         self.initdb('draft')
-        with self.assertRaises(NotImplementedError):
-            self.store.create_course("org", "course/run", store_name='xml')
+        xml_store = self.store._get_modulestore_by_type(XML_MODULESTORE_TYPE)
+        # the important thing is not which exception it raises but that it raises an exception
+        with self.assertRaises(AttributeError):
+            xml_store.create_course("org", "course/run", 999)
 
     @ddt.data('draft', 'split')
     def test_get_course(self, default_ms):

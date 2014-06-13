@@ -1437,13 +1437,16 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
         else:
             return DefinitionLocator(definition['category'], definition['_id'])
 
-    def get_modulestore_type(self):
+    def get_modulestore_type(self, course_key=None):
         """
         Returns an enumeration-like type reflecting the type of this modulestore
         The return can be one of:
         "xml" (for XML based courses),
         "mongo" for old-style MongoDB backed courses,
         "split" for new-style split MongoDB backed courses.
+
+        Args:
+            course_key: just for signature compatibility
         """
         return SPLIT_MONGO_MODULESTORE_TYPE
 

@@ -1533,7 +1533,7 @@ class ContentStoreTest(ContentStoreTestCase):
         self.assertEqual(resp.status_code, 200)
         payload = parse_json(resp)
         problem_loc = UsageKey.from_string(payload['locator'])
-        problem = get_modulestore(problem_loc).get_item(problem_loc)
+        problem = modulestore().get_item(problem_loc)
         # should be a CapaDescriptor
         self.assertIsInstance(problem, CapaDescriptor, "New problem is not a CapaDescriptor")
         context = problem.get_context()
@@ -1857,8 +1857,8 @@ class MetadataSaveTestCase(ContentStoreTestCase):
             delattr(self.video_descriptor, field_name)
 
         self.assertNotIn('html5_sources', own_metadata(self.video_descriptor))
-        get_modulestore(location).update_item(self.video_descriptor, self.user.id)
-        module = get_modulestore(location).get_item(location)
+        modulestore().update_item(self.video_descriptor, self.user.id)
+        module = modulestore().get_item(location)
 
         self.assertNotIn('html5_sources', own_metadata(module))
 

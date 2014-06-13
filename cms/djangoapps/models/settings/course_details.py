@@ -46,31 +46,31 @@ class CourseDetails(object):
 
         temploc = course_key.make_usage_key('about', 'syllabus')
         try:
-            course_details.syllabus = get_modulestore(temploc).get_item(temploc).data
+            course_details.syllabus = modulestore().get_item(temploc).data
         except ItemNotFoundError:
             pass
 
         temploc = course_key.make_usage_key('about', 'short_description')
         try:
-            course_details.short_description = get_modulestore(temploc).get_item(temploc).data
+            course_details.short_description = modulestore().get_item(temploc).data
         except ItemNotFoundError:
             pass
 
         temploc = course_key.make_usage_key('about', 'overview')
         try:
-            course_details.overview = get_modulestore(temploc).get_item(temploc).data
+            course_details.overview = modulestore().get_item(temploc).data
         except ItemNotFoundError:
             pass
 
         temploc = course_key.make_usage_key('about', 'effort')
         try:
-            course_details.effort = get_modulestore(temploc).get_item(temploc).data
+            course_details.effort = modulestore().get_item(temploc).data
         except ItemNotFoundError:
             pass
 
         temploc = course_key.make_usage_key('about', 'video')
         try:
-            raw_video = get_modulestore(temploc).get_item(temploc).data
+            raw_video = modulestore().get_item(temploc).data
             course_details.intro_video = CourseDetails.parse_video_tag(raw_video)
         except ItemNotFoundError:
             pass
@@ -84,7 +84,7 @@ class CourseDetails(object):
         delete the about item.
         """
         temploc = course_key.make_usage_key('about', about_key)
-        store = get_modulestore(temploc)
+        store = modulestore()
         if data is None:
             store.delete_item(temploc, user.id)
         else:

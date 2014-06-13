@@ -77,6 +77,6 @@ class CourseMetadata(object):
                 setattr(descriptor, key, value)
 
         if dirty:
-            get_modulestore(descriptor.location).update_item(descriptor, user.id if user else None)
+            modulestore().update_item(descriptor, user.id if user else None)
 
         return cls.fetch(descriptor)
