@@ -413,7 +413,7 @@ class DraftModuleStore(MongoModuleStore):
             published_item = self.collection.find_one(
                 {'_id': published_xblock_location.to_deprecated_son()}
             )
-            if not published_item:
+            if published_item is None:
                 return PublishState.private
             else:
                 return PublishState.draft

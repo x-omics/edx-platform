@@ -84,7 +84,7 @@ class ContainerPageTestCase(StudioPageTestCase):
 
         # Now publish the unit and validate again
         self.store.publish(self.vertical.location, 0)
-        self.store.publish(draft_container.location, 0)
+        draft_container = self.store.publish(draft_container.location, 0)
         test_container_html(draft_container)
 
     def _test_html_content(self, xblock, expected_section_tag, expected_breadcrumbs):
