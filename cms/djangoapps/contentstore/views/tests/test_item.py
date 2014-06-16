@@ -22,7 +22,7 @@ from student.tests.factories import UserFactory
 from xmodule.capa_module import CapaDescriptor
 from xmodule.modulestore import PublishState
 from xmodule.modulestore.django import modulestore
-from xmodule.modulestore.exceptions import ItemNotFoundError
+from xblock.exceptions import NoSuchHandlerError
 from opaque_keys.edx.keys import UsageKey
 from opaque_keys.edx.locations import Location
 from xmodule.partitions.partitions import Group, UserPartition
@@ -37,11 +37,14 @@ class ItemTest(CourseTestCase):
         self.usage_key = self.course.location
         self.store = modulestore()
 
-    def get_item_from_modulestore(self, usage_key):
+    def get_item_from_modulestore(self, usage_key, verify_is_draft=False):
         """
         Get the item referenced by the UsageKey from the modulestore
         """
-        return self.store.get_item(usage_key)
+        item = self.store.get_item(usage_key)
+        if verify_is_draft:
+            self.assertTrue(getattr(item, 'is_draft', False))
+        return item
 
     def response_usage_key(self, response):
         """
@@ -846,7 +849,7 @@ class TestEditSplitModule(ItemTest):
         )
 
         # Verify the partition_id was saved.
-        split_test = self.get_item_from_modulestore(self.split_test_usage_key, True)
+        split_test = self.get_item_from_modulestore(self.split_test_usage_key, verify_is_draft=True)
         self.assertEqual(partition_id, split_test.user_partition_id)
         return split_test
 
@@ -855,7 +858,7 @@ class TestEditSplitModule(ItemTest):
         Test that verticals are created for the experiment groups when
         a spit test module is edited.
         """
-        split_test = self.get_item_from_modulestore(self.split_test_usage_key, True)
+        split_test = self.get_item_from_modulestore(self.split_test_usage_key, verify_is_draft=True)
         # Initially, no user_partition_id is set, and the split_test has no children.
         self.assertEqual(-1, split_test.user_partition_id)
         self.assertEqual(0, len(split_test.children))
@@ -865,8 +868,8 @@ class TestEditSplitModule(ItemTest):
 
         # Verify that child verticals have been set to match the groups
         self.assertEqual(2, len(split_test.children))
-        vertical_0 = self.get_item_from_modulestore(split_test.children[0], True)
-        vertical_1 = self.get_item_from_modulestore(split_test.children[1], True)
+        vertical_0 = self.get_item_from_modulestore(split_test.children[0], verify_is_draft=True)
+        vertical_1 = self.get_item_from_modulestore(split_test.children[1], verify_is_draft=True)
         self.assertEqual("vertical", vertical_0.category)
         self.assertEqual("vertical", vertical_1.category)
         self.assertEqual("alpha", vertical_0.display_name)
@@ -893,9 +896,9 @@ class TestEditSplitModule(ItemTest):
         split_test = self._update_partition_id(1)
         # We don't currently remove existing children.
         self.assertEqual(5, len(split_test.children))
-        vertical_0 = self.get_item_from_modulestore(split_test.children[2], True)
-        vertical_1 = self.get_item_from_modulestore(split_test.children[3], True)
-        vertical_2 = self.get_item_from_modulestore(split_test.children[4], True)
+        vertical_0 = self.get_item_from_modulestore(split_test.children[2], verify_is_draft=True)
+        vertical_1 = self.get_item_from_modulestore(split_test.children[3], verify_is_draft=True)
+        vertical_2 = self.get_item_from_modulestore(split_test.children[4], verify_is_draft=True)
 
         # Verify that the group_id_to child mapping is correct.
         self.assertEqual(3, len(split_test.group_id_to_child))
@@ -941,11 +944,11 @@ class TestComponentHandler(TestCase):
     def setUp(self):
         self.request_factory = RequestFactory()
 
-        patcher = patch('contentstore.views.component.get_modulestore')
-        self.get_modulestore = patcher.start()
+        patcher = patch('contentstore.views.component.modulestore')
+        self.modulestore = patcher.start()
         self.addCleanup(patcher.stop)
 
-        self.descriptor = self.get_modulestore.return_value.get_item.return_value
+        self.descriptor = self.modulestore.return_value.get_item.return_value
 
         self.usage_key_string = unicode(
             Location('dummy_org', 'dummy_course', 'dummy_run', 'dummy_category', 'dummy_name')
@@ -957,7 +960,7 @@ class TestComponentHandler(TestCase):
         self.request.user = self.user
 
     def test_invalid_handler(self):
-        self.descriptor.handle.side_effect = Http404
+        self.descriptor.handle.side_effect = NoSuchHandlerError
 
         with self.assertRaises(Http404):
             component_handler(self.request, self.usage_key_string, 'invalid_handler')

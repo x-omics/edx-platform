@@ -393,7 +393,7 @@ class SplitTestDescriptor(SplitTestFields, SequenceDescriptor):
                         dest_usage_key, user.id,
                         definition_data=None,
                         metadata=metadata,
-                        system=self.system,
+                        runtime=self.system,
                     )
                     self.children.append(dest_usage_key)  # pylint: disable=no-member
                     group_id_mapping[unicode(group.id)] = dest_usage_key

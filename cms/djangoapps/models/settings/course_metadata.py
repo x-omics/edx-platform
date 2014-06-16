@@ -1,6 +1,7 @@
 from xblock.fields import Scope
 
 from cms.lib.xblock.mixin import CmsBlockMixin
+from xmodule.modulestore.django import modulestore
 
 
 class CourseMetadata(object):

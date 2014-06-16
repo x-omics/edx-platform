@@ -38,7 +38,6 @@ from edxmako.shortcuts import render_to_string
 from models.settings.course_grading import CourseGradingModel
 from cms.lib.xblock.runtime import handler_url, local_resource_url
 from opaque_keys.edx.keys import UsageKey, CourseKey
-from xmodule.modulestore.mongo.draft import DRAFT
 
 __all__ = ['orphan_handler', 'xblock_handler', 'xblock_view_handler']
 
@@ -293,14 +292,14 @@ def _save_item(request, usage_key, data=None, children=None, metadata=None, null
     if publish:
         if publish == 'make_private':
             try:
-                modulestore().unpublish(existing_item.location, request.user.id),
+                store.unpublish(existing_item.location, request.user.id),
             except ItemNotFoundError:
                 pass
         elif publish == 'create_draft':
             try:
                 # This recursively clones the existing item location to a draft location (the draft is
                 # implicit, because modulestore is a Draft modulestore)
-                modulestore().convert_to_draft(existing_item.location, request.user.id)
+                store.convert_to_draft(existing_item.location, request.user.id)
             except DuplicateItemError:
                 pass
 
@@ -390,8 +389,8 @@ def _create_item(request):
     if not has_course_access(request.user, usage_key.course_key):
         raise PermissionDenied()
 
-    modulestore = modulestore()
-    parent = modulestore.get_item(usage_key)
+    store = modulestore()
+    parent = store.get_item(usage_key)
     dest_usage_key = usage_key.replace(category=category, name=uuid4().hex)
 
     # get the metadata, display_name, and definition from the request
@@ -409,7 +408,7 @@ def _create_item(request):
     if display_name is not None:
         metadata['display_name'] = display_name
 
-    modulestore.create_and_save_xmodule(
+    store.create_and_save_xmodule(
         dest_usage_key,
         request.user.id,
         definition_data=data,
@@ -421,19 +420,19 @@ def _create_item(request):
     # if we add one then we need to also add it to the policy information (i.e. metadata)
     # we should remove this once we can break this reference from the course to static tabs
     if category == 'static_tab':
-        course = modulestore.get_course(dest_usage_key.course_key)
+        course = store.get_course(dest_usage_key.course_key)
         course.tabs.append(
             StaticTab(
                 name=display_name,
                 url_slug=dest_usage_key.name,
             )
         )
-        modulestore.update_item(course, request.user.id)
+        store.update_item(course, request.user.id)
 
     # TODO replace w/ nicer accessor
     if not 'detached' in parent.runtime.load_block_type(category)._class_tags:
         parent.children.append(dest_usage_key)
-        modulestore().update_item(parent, request.user.id)
+        store.update_item(parent, request.user.id)
 
     return JsonResponse({"locator": unicode(dest_usage_key), "courseKey": unicode(dest_usage_key.course_key)})
 
@@ -458,7 +457,7 @@ def _duplicate_item(parent_usage_key, duplicate_source_usage_key, display_name=N
         else:
             duplicate_metadata['display_name'] = _("Duplicate of '{0}'").format(source_item.display_name)
 
-    dest_module = modulestore().create_and_save_xmodule(
+    dest_module = store.create_and_save_xmodule(
         dest_usage_key,
         user.id,
         definition_data=source_item.get_explicitly_set_fields_by_scope(Scope.content),
@@ -473,10 +472,10 @@ def _duplicate_item(parent_usage_key, duplicate_source_usage_key, display_name=N
         for child in source_item.children:
             dupe = _duplicate_item(dest_usage_key, child, user=user)
             dest_module.children.append(dupe)
-        modulestore().update_item(dest_module, user.id if user else None)
+        store.update_item(dest_module, user.id if user else None)
 
     if not 'detached' in source_item.runtime.load_block_type(category)._class_tags:
-        parent = modulestore().get_item(parent_usage_key)
+        parent = store.get_item(parent_usage_key)
         # If source was already a child of the parent, add duplicate immediately afterward.
         # Otherwise, add child to end.
         if duplicate_source_usage_key in parent.children:
@@ -484,7 +483,7 @@ def _duplicate_item(parent_usage_key, duplicate_source_usage_key, display_name=N
             parent.children.insert(source_index + 1, dest_usage_key)
         else:
             parent.children.append(dest_usage_key)
-        modulestore().update_item(parent, user.id if user else None)
+        store.update_item(parent, user.id if user else None)
 
     return dest_usage_key
 
@@ -508,11 +507,12 @@ def orphan_handler(request, course_key_string):
             raise PermissionDenied()
     if request.method == 'DELETE':
         if request.user.is_staff:
-            items = modulestore().get_orphans(course_usage_key)
+            store = modulestore()
+            items = store.get_orphans(course_usage_key)
             for itemloc in items:
                 # get_orphans returns the deprecated string format
                 usage_key = course_usage_key.make_usage_key_from_deprecated_string(itemloc)
-                modulestore().delete_item(usage_key, request.user.id)
+                store.delete_item(usage_key, request.user.id)
             return JsonResponse({'deleted': items})
         else:
             raise PermissionDenied()
