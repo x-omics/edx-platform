@@ -3,6 +3,7 @@ Script for finding all courses whose org/name pairs == other courses when ignori
 """
 from django.core.management.base import BaseCommand
 from xmodule.modulestore.django import modulestore
+from xmodule.modulestore import MONGO_MODULESTORE_TYPE
 
 
 #
@@ -15,7 +16,7 @@ class Command(BaseCommand):
     help = 'List all courses ids which may collide when ignoring case'
 
     def handle(self, *args, **options):
-        mstore = modulestore()
+        mstore = modulestore()._get_modulestore_by_type(MONGO_MODULESTORE_TYPE)
         if hasattr(mstore, 'collection'):
             map_fn = '''
                 function () {
