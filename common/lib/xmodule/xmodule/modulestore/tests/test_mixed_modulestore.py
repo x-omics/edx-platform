@@ -108,12 +108,6 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
         )
         patcher.start()
         self.addCleanup(patcher.stop)
-        patcher = patch.multiple(
-            'xmodule.modulestore.branch_setting.BranchSetting',
-            _get_branch_from_setting=Mock(return_value='draft'),
-        )
-        patcher.start()
-        self.addCleanup(patcher.stop)
         self.addTypeEqualityFunc(BlockUsageLocator, '_compareIgnoreVersion')
         self.addTypeEqualityFunc(CourseLocator, '_compareIgnoreVersion')
         # define attrs which get set in initdb to quell pylint
@@ -403,5 +397,6 @@ def create_modulestore_instance(engine, doc_store_config, options, i18n_service=
 
     return class_(
         doc_store_config=doc_store_config,
+        branch_setting='draft',
         **options
     )
