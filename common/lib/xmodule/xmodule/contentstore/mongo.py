@@ -163,17 +163,25 @@ class MongoContentStore(ContentStore):
             course_key, start=start, maxresults=maxresults, get_thumbnails=False, sort=sort
         )
 
-    def remove_content_for_course(self, course_key, file_name_regex):
+    def remove_redundant_content_for_course(self, course_key):
         """
-        Finds and removes all file/files with given filename
+        Finds and removes all redundant file/files (Mac os metadata files which start with ._ and .DS_Store)
 
         :param course_key: the :class:`CourseKey` identifying the course
-        :param file_name_regex: the file name (or regex) of asset/assets which needs to be removed
         """
+        files_name_regex = [u'^._.*$', u'^.DS_Store$']
+
         course_filter = course_key.make_asset_key("asset", None)
         query = location_to_query(course_filter, wildcard=True, tag=XASSET_LOCATION_TAG)
-        query['_id.name'] = {'$regex': u'^{}$'.format(file_name_regex)}
-        self.fs_files.remove(query)
+
+        regex_query = []
+        for name_regex in files_name_regex:
+            regex_query.append({'_id.name': {'$regex': name_regex}})
+        query['$or'] = regex_query
+
+        items = self.fs_files.find(query)
+        for asset in items:
+            self.fs.delete(asset['_id'])
 
     def _get_all_content_for_course(self, course_key, get_thumbnails=False, start=0, maxresults=-1, sort=None):
         '''

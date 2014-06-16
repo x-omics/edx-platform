@@ -103,8 +103,8 @@ def import_static_content(
             # to subsitute in the module data
             remap_dict[fullname_with_subpath] = asset_key
 
-    # Remove all redundant Mac OS metadata files which start with '._'
-    static_content_store.remove_content_for_course(target_course_id, '^._.*$')
+    # Remove all redundant Mac OS metadata files
+    static_content_store.remove_redundant_content_for_course(target_course_id)
 
     return remap_dict
 

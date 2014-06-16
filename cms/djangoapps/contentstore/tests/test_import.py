@@ -3,28 +3,26 @@
 """
 Tests for import_from_xml using the mongo modulestore.
 """
+import copy
+from path import path
+from pymongo import MongoClient
+from uuid import uuid4
 
+from django.conf import settings
+from django.contrib.auth.models import User
 from django.test.client import Client
 from django.test.utils import override_settings
-from django.conf import settings
-from path import path
-import copy
 
-from django.contrib.auth.models import User
-
-from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from contentstore.tests.modulestore_config import TEST_MODULESTORE
-
-from xmodule.modulestore.django import modulestore
-from xmodule.contentstore.django import contentstore
 from opaque_keys.edx.locations import SlashSeparatedCourseKey, AssetLocation
-from xmodule.modulestore.xml_importer import import_from_xml
-from xmodule.contentstore.content import StaticContent
-from xmodule.contentstore.django import _CONTENTSTORE
-
+from xmodule.contentstore.content import XASSET_LOCATION_TAG
+from xmodule.contentstore.django import contentstore, _CONTENTSTORE
 from xmodule.exceptions import NotFoundError
-from uuid import uuid4
-from pymongo import MongoClient
+from xmodule.modulestore.django import modulestore
+from xmodule.modulestore.mongo.base import location_to_query
+from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
+from xmodule.modulestore.xml_importer import import_from_xml
+
 
 TEST_DATA_CONTENTSTORE = copy.deepcopy(settings.CONTENTSTORE)
 TEST_DATA_CONTENTSTORE['DOC_STORE_CONFIG']['db'] = 'test_xcontent_%s' % uuid4().hex
@@ -143,6 +141,52 @@ class ContentStoreImportTest(ModuleStoreTestCase):
         # make sure course.static_asset_path is correct
         print "static_asset_path = {0}".format(course.static_asset_path)
         self.assertEqual(course.static_asset_path, 'test_import_course')
+
+    def test_ignore_remove_redundant_asset_import(self):
+        """
+        This test validates that an redundant Mac metadata file/files ('._example.txt', '.DS_Store') are
+        cleaned up on import
+        """
+        content_store = contentstore()
+        module_store = modulestore('direct')
+
+        import_from_xml(
+            module_store,
+            'common/test/data/',
+            ['dot-underscore'],
+            static_content_store=content_store,
+            do_import_static=True,
+            verbose=True
+        )
+
+        course = module_store.get_course(SlashSeparatedCourseKey('edX', 'dot-underscore', '2014_Fall'))
+        self.assertIsNotNone(course)
+
+        # check that there is only one asset in contentstore
+        all_assets, count = content_store.get_all_content_for_course(course.id)
+        self.assertEqual(count, 1)
+        asset = all_assets[0]
+        self.assertEqual(asset['_id']['name'], u'example.txt')
+
+        # add another redundant asset
+        course_filter = course.id.make_asset_key("asset", None)
+        query = location_to_query(course_filter, wildcard=True, tag=XASSET_LOCATION_TAG)
+        query['_id.name'] = asset['_id']['name']
+        asset_doc = content_store.fs_files.find_one(query)
+        asset_doc['_id']['name'] = u'._example_test.txt'
+        content_store.fs_files.insert(asset_doc)
+
+        all_assets, count = content_store.get_all_content_for_course(course.id)
+        self.assertEqual(count, 2)
+        self.assertEqual(all_assets[0]['_id']['name'], u'example.txt')
+        self.assertEqual(all_assets[1]['_id']['name'], u'._example_test.txt')
+
+        # now call asset cleanup method and check that there is only one asset in contentstore
+        content_store.remove_redundant_content_for_course(course.id)
+        all_assets, count = content_store.get_all_content_for_course(course.id)
+        self.assertEqual(count, 1)
+        asset = all_assets[0]
+        self.assertEqual(asset['_id']['name'], u'example.txt')
 
     def test_asset_import_nostatic(self):
         '''
