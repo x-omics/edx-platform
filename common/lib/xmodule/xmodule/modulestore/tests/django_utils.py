@@ -142,11 +142,11 @@ class ModuleStoreTestCase(TestCase):
         return updated_course
 
     @staticmethod
-    def drop_mongo_collections():
+    def drop_mongo_collections(modulestore_type=MONGO_MODULESTORE_TYPE):
         """
         If using a Mongo-backed modulestore & contentstore, drop the collections.
         """
-        store = modulestore()._get_modulestore_by_type(MONGO_MODULESTORE_TYPE)  # pylint: disable=W0212
+        store = modulestore()._get_modulestore_by_type(modulestore_type)  # pylint: disable=W0212
         if hasattr(store, 'collection'):
             connection = store.collection.database.connection
             store.collection.drop()

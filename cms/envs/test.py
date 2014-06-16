@@ -59,6 +59,18 @@ STATICFILES_DIRS += [
     if os.path.isdir(COMMON_TEST_DATA_ROOT / course_dir)
 ]
 
+# Add split as another store for testing
+MODULESTORE['default']['OPTIONS']['stores'].append(
+    {
+        'NAME': 'split',
+        'ENGINE': 'xmodule.modulestore.split_mongo.SplitMongoModuleStore',
+        'DOC_STORE_CONFIG': DOC_STORE_CONFIG,
+        'OPTIONS': {
+            'render_template': 'edxmako.shortcuts.render_to_string',
+        }
+    },
+)
+# Update module store settings per defaults for tests
 update_module_store_settings(
     MODULESTORE,
     module_store_options={

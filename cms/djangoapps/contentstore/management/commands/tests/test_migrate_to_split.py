@@ -8,6 +8,7 @@ from django.core.management import CommandError, call_command
 from django.test.utils import override_settings
 from contentstore.management.commands.migrate_to_split import Command
 from contentstore.tests.modulestore_config import TEST_MODULESTORE
+from xmodule.modulestore import SPLIT_MONGO_MODULESTORE_TYPE
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
 from xmodule.modulestore.django import modulestore, clear_existing_modulestores
@@ -58,7 +59,7 @@ class TestMigrateToSplit(ModuleStoreTestCase):
         password = 'foo'
         self.user = User.objects.create_user(uname, email, password)
         self.course = CourseFactory()
-        self.addCleanup(ModuleStoreTestCase.drop_mongo_collections, 'split')
+        self.addCleanup(ModuleStoreTestCase.drop_mongo_collections, SPLIT_MONGO_MODULESTORE_TYPE)
         self.addCleanup(clear_existing_modulestores)
 
     def test_user_email(self):

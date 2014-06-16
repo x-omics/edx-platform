@@ -1,3 +1,4 @@
+from xmodule.modulestore import SPLIT_MONGO_MODULESTORE_TYPE
 from xmodule.course_module import CourseDescriptor
 from xmodule.x_module import XModuleDescriptor
 import factory
@@ -14,7 +15,7 @@ class SplitFactory(factory.Factory):
         # Delayed import so that we only depend on django if the caller
         # hasn't provided their own modulestore
         from xmodule.modulestore.django import modulestore
-        return modulestore('split')
+        return modulestore()._get_modulestore_by_type(SPLIT_MONGO_MODULESTORE_TYPE)
 
 
 class PersistentCourseFactory(SplitFactory):
