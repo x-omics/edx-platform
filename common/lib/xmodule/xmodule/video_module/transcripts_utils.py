@@ -148,11 +148,11 @@ def download_youtube_subs(youtube_id, video_descriptor, settings):
     Raises:
         GetTranscriptsFromYouTubeException, if fails.
     """
-    i18n = item.runtime.service(item, "i18n")
+    i18n = video_descriptor.runtime.service(video_descriptor, "i18n")
     _ = i18n.ugettext
 
     subs = get_transcripts_from_youtube(youtube_id, settings, i18n)
-    save_subs_to_store(subs, youtube_id, item)
+    save_subs_to_store(subs, youtube_id, video_descriptor)
 
     log.info(
         "Transcripts for youtube_id %s (speed %s) are downloaded and saved.", youtube_id, speed
