@@ -387,9 +387,7 @@ class ContentStoreToyCourseTest(ContentStoreTestCase):
         # make sure the parent points to the child object which is to be deleted
         self.assertTrue(sequential.location in chapter.children)
 
-        # NAATODO - Need to update this test to match the new delete behavior
-        # 'recurse' and 'all_versions' are no longer valid options
-        self.client.delete(get_url('xblock_handler', sequential_key), {'recurse': True, 'all_versions': True})
+        self.client.delete(get_url('xblock_handler', sequential_key))
 
         found = False
         try:
@@ -922,7 +920,7 @@ class ContentStoreToyCourseTest(ContentStoreTestCase):
 
         shutil.rmtree(root_dir)
 
-    def check_import(self, module_store, root_dir, draft_store, content_store, course_id,
+    def check_import(self, module_store, root_dir, content_store, course_id,
                      locked_asset_key, locked_asset_attrs):
         # reimport
         import_from_xml(
@@ -930,20 +928,18 @@ class ContentStoreToyCourseTest(ContentStoreTestCase):
             0, 
             root_dir,
             ['test_export'],
-            draft_store=draft_store,
             static_content_store=content_store,
             target_course_id=course_id,
         )
 
-        items = module_store.get_items(course_id, category='vertical')
+        items = module_store.get_items(course_id, category='vertical', revision='published')
         self._check_verticals(items)
 
         # verify that we have the content in the draft store as well
-        vertical = draft_store.get_item(
+        vertical = module_store.get_item(
             course_id.make_usage_key('vertical', 'vertical_test'),
             depth=1
         )
-
         self.assertTrue(getattr(vertical, 'is_draft', False))
         self.assertNotIn('index_in_children_list', vertical.xml_attributes)
         self.assertNotIn('parent_sequential_url', vertical.xml_attributes)
@@ -958,17 +954,15 @@ class ContentStoreToyCourseTest(ContentStoreTestCase):
                 self.assertNotIn('parent_sequential_url', child.data)
 
         # make sure that we don't have a sequential that is in draft mode
-        sequential = draft_store.get_item(
+        sequential = module_store.get_item(
             course_id.make_usage_key('sequential', 'vertical_sequential')
         )
-
         self.assertFalse(getattr(sequential, 'is_draft', False))
 
         # verify that we have the private vertical
-        test_private_vertical = draft_store.get_item(
+        test_private_vertical = module_store.get_item(
             course_id.make_usage_key('vertical', 'a_private_vertical')
         )
-
         self.assertTrue(getattr(test_private_vertical, 'is_draft', False))
 
         # make sure the textbook survived the export/import
