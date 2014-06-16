@@ -53,7 +53,7 @@ class SplitWMongoCourseBoostrapper(unittest.TestCase):
         self.addCleanup(self.split_mongo.db.connection.close)
         self.addCleanup(self.tear_down_split)
         self.old_mongo = MongoModuleStore(self.db_config, **self.modulestore_options)
-        self.draft_mongo = DraftMongoModuleStore(self.db_config, **self.modulestore_options)
+        self.draft_mongo = DraftMongoModuleStore(self.db_config, branch_setting='draft', **self.modulestore_options)
         self.addCleanup(self.tear_down_mongo)
         self.old_course_key = None
         self.runtime = None
