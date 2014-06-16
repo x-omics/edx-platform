@@ -38,8 +38,6 @@ class ContentStoreImportTest(ModuleStoreTestCase):
     """
     def setUp(self):
 
-        settings.MODULESTORE['default']['OPTIONS']['fs_root'] = path('common/test/data')
-        settings.MODULESTORE['direct']['OPTIONS']['fs_root'] = path('common/test/data')
         uname = 'testuser'
         email = 'test+courses@edx.org'
         password = 'foo'
