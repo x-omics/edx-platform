@@ -17,6 +17,7 @@ from student.tests.factories import UserFactory
 from student.roles import CourseInstructorRole, CourseStaffRole, GlobalStaff, OrgStaffRole, OrgInstructorRole
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
+from xmodule.modulestore import MONGO_MODULESTORE_TYPE
 from opaque_keys.edx.locations import SlashSeparatedCourseKey
 from xmodule.modulestore.django import modulestore
 from xmodule.error_module import ErrorDescriptor
@@ -253,18 +254,20 @@ class TestCourseListing(ModuleStoreTestCase):
         Create good courses, courses that won't load, and deleted courses which still have
         roles. Test course listing.
         """
+        store = modulestore()._get_modulestore_by_type(MONGO_MODULESTORE_TYPE)
+
         course_location = SlashSeparatedCourseKey('testOrg', 'testCourse', 'RunBabyRun')
         self._create_course_with_access_groups(course_location, self.user)
 
         course_location = SlashSeparatedCourseKey('testOrg', 'doomedCourse', 'RunBabyRun')
         self._create_course_with_access_groups(course_location, self.user)
-        modulestore().delete_course(course_location)
+        store.delete_course(course_location)
 
         course_location = SlashSeparatedCourseKey('testOrg', 'erroredCourse', 'RunBabyRun')
         course = self._create_course_with_access_groups(course_location, self.user)
-        course_db_record = modulestore()._find_one(course.location)
+        course_db_record = store._find_one(course.location)
         course_db_record.setdefault('metadata', {}).get('tabs', []).append({"type": "wiko", "name": "Wiki" })
-        modulestore().collection.update(
+        store.collection.update(
             {'_id': course.location.to_deprecated_son()},
             {'$set': {
                 'metadata.tabs': course_db_record['metadata']['tabs'],
