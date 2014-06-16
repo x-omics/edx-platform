@@ -4,6 +4,7 @@ define(["js/views/validation", "jquery", "underscore", "gettext", "codemirror"],
 var AdvancedView = ValidatingView.extend({
     error_saving : "error_saving",
     successful_changes: "successful_changes",
+    render_deprecated: false,
 
     // Model class is CMS.Models.Settings.Advanced
     events : {
@@ -31,7 +32,9 @@ var AdvancedView = ValidatingView.extend({
         var self = this;
         _.each(_.sortBy(_.keys(this.model.attributes), function(key) { return self.model.get(key).display_name; }),
             function(key) {
-                listEle$.append(self.renderTemplate(key, self.model.get(key)));
+                if (self.render_deprecated || !self.model.get(key).deprecated) {
+                    listEle$.append(self.renderTemplate(key, self.model.get(key)));
+                }
             });
 
         var policyValues = listEle$.find('.json');

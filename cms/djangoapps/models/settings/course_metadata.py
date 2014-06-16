@@ -51,7 +51,7 @@ class CourseMetadata(object):
                 'value': field.read_json(descriptor),
                 'display_name': field.display_name,
                 'help': field.help,
-                'deprecated': field.deprecated
+                'deprecated': field.runtime_options['deprecated'] if 'deprecated' in field.runtime_options else False
             }
 
         return result

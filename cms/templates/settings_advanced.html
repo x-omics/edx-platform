@@ -34,21 +34,22 @@ require(["domReady!", "jquery", "gettext", "js/models/settings/advanced", "js/vi
   });
   editor.render();
 
-  $('#deprecated-settings').click(function() {
+  $("#deprecated-settings").click(function() {
       var $this = $(this);
       var wrapperDeprecatedSetting = $('.wrapper-deprecated-setting');
       var deprecatedSettingsLabel = $('.deprecated-settings-label');
-      var isDeprecated = $('.is-deprecated');
       if ($this.is(':checked')) {
           wrapperDeprecatedSetting.addClass('is-set');
           deprecatedSettingsLabel.text(gettext('Hide Deprecated Settings'));
-          isDeprecated.slideDown();
+          editor.render_deprecated = true;
       }
       else {
           wrapperDeprecatedSetting.removeClass('is-set');
           deprecatedSettingsLabel.text(gettext('Show Deprecated Settings'));
-          isDeprecated.slideUp();
+          editor.render_deprecated = false;
       }
+
+      editor.render();
   });
 
 });

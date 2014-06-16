@@ -841,15 +841,10 @@
         }
 
         &.is-deprecated {
-          display: none;
           background-color: $pink-l5;
 
           .status {
             color: $pink-l2;
-          }
-
-          &.is-shown {
-            display: block;
           }
         }
       }
