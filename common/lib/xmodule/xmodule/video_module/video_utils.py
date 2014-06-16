@@ -3,6 +3,7 @@ Module containts utils specific for video_module but not for transcripts.
 """
 import json
 import logging
+import urllib
 import requests
 
 from requests.exceptions import RequestException
@@ -50,7 +51,7 @@ def get_video_from_cdn(cdn_base_url, original_video_url):
     where `s3_url` is requested original video url and `sources` is the list of
     alternative links.
     """
-    request_url = cdn_base_url + original_video_url
+    request_url = cdn_base_url + urllib.quote(original_video_url)
 
     try:
         cdn_response = requests.get(request_url, timeout=0.5)
