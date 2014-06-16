@@ -40,16 +40,14 @@ class DraftModuleStore(MongoModuleStore):
     their children) to published modules.
     """
 
-    def __init__(self,
-                 branch_setting=None,
-                 **kwargs
-    ):
+    def __init__(self, *args, **kwargs):
         """
             :param branch_setting: the default branch setting for this store
         """
-        super(DraftModuleStore, self).__init__(**kwargs)
+        branch_setting = kwargs.pop('branch_setting', 'published')
+        super(DraftModuleStore, self).__init__(*args, **kwargs)
         # default to the 'published' branch
-        self.branch_setting = branch_setting if branch_setting else 'published'
+        self.branch_setting = branch_setting
 
     def get_item(self, usage_key, depth=0):
         """

@@ -30,6 +30,8 @@ from xmodule.modulestore.tests.test_modulestore import check_path_to_location
 from nose.tools import assert_in
 from xmodule.exceptions import NotFoundError
 from git.test.lib.asserts import assert_not_none
+from xmodule.x_module import XModuleMixin
+from xmodule.modulestore.mongo.base import as_draft
 
 
 log = logging.getLogger(__name__)
@@ -43,7 +45,7 @@ DEFAULT_CLASS = 'xmodule.raw_module.RawDescriptor'
 RENDER_TEMPLATE = lambda t_n, d, ctx = None, nsp = 'main': ''
 
 
-class ReferenceTestXBlock(XBlock):
+class ReferenceTestXBlock(XBlock, XModuleMixin):
     """
     Test xblock type to test the reference field types
     """
@@ -95,7 +97,9 @@ class TestMongoModuleStore(unittest.TestCase):
         #
         # Also test draft store imports
         #
-        draft_store = DraftModuleStore(doc_store_config, FS_ROOT, RENDER_TEMPLATE, default_class=DEFAULT_CLASS)
+        draft_store = DraftModuleStore(
+            doc_store_config, FS_ROOT, RENDER_TEMPLATE, default_class=DEFAULT_CLASS, branch_setting='draft'
+        )
         import_from_xml(
             draft_store,
             999,
@@ -406,7 +410,7 @@ class TestMongoModuleStore(unittest.TestCase):
 
         def check_mongo_fields():
             def get_item(location):
-                return self.draft_store._find_one(location)
+                return self.draft_store._find_one(as_draft(location))
 
             def check_children(payload):
                 for child in payload['definition']['children']:
