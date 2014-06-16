@@ -498,6 +498,7 @@ class VideoExportTestCase(VideoDescriptorTestBase):
         self.descriptor.start_time = datetime.timedelta(seconds=1.0)
         self.descriptor.end_time = datetime.timedelta(seconds=60)
         self.descriptor.track = 'http://www.example.com/track'
+        self.descriptor.handout = 'http://www.example.com/handout'
         self.descriptor.download_track = True
         self.descriptor.html5_sources = ['http://www.example.com/source.mp4', 'http://www.example.com/source.ogg']
         self.descriptor.download_video = True
