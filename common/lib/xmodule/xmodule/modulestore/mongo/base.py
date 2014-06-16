@@ -267,6 +267,7 @@ def location_to_query(location, wildcard=True, tag='i4x'):
 # Things w/ these categories should never be marked as version='draft'
 DIRECT_ONLY_CATEGORIES = ['course', 'chapter', 'sequential', 'about', 'static_tab', 'course_info']
 DRAFT = 'draft'
+PUBLISHED = 'published'
 
 
 def as_draft(location):

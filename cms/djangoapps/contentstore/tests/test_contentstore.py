@@ -29,7 +29,6 @@ from xmodule.contentstore.django import contentstore, _CONTENTSTORE
 from xmodule.contentstore.utils import restore_asset_from_trashcan, empty_asset_trashcan
 from xmodule.exceptions import NotFoundError, InvalidVersionError
 from xmodule.modulestore import mongo, MONGO_MODULESTORE_TYPE
-from xmodule.modulestore.branch_setting import BranchSetting
 from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.exceptions import ItemNotFoundError
 from xmodule.modulestore.inheritance import own_metadata
@@ -202,16 +201,13 @@ class ContentStoreToyCourseTest(ContentStoreTestCase):
         store.convert_to_draft(html_module_from_draft_store.location, self.user.id)
 
         # Query get_items() and find the html item. This should just return back a single item (not 2).
-        BranchSetting.set_published()
-        direct_store_items = store.get_items(course_key)
+        direct_store_items = store.get_items(course_key, revision='published')
         html_items_from_direct_store = [item for item in direct_store_items if (item.location == html_usage_key)]
         self.assertEqual(len(html_items_from_direct_store), 1)
         self.assertFalse(getattr(html_items_from_direct_store[0], 'is_draft', False))
 
-        # Fetch from the draft store. Note that even though we pass
-        # None in the revision field, the draft store will replace that with 'draft'.
-        BranchSetting.set_draft()
-        draft_store_items = store.get_items(course_key)
+        # Fetch from the draft store.
+        draft_store_items = store.get_items(course_key, revision='draft-only')
         html_items_from_draft_store = [item for item in draft_store_items if (item.location == html_usage_key)]
         self.assertEqual(len(html_items_from_draft_store), 1)
         self.assertTrue(getattr(html_items_from_draft_store[0], 'is_draft', False))

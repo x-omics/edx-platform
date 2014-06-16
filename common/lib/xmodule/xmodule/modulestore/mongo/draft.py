@@ -13,10 +13,9 @@ from pytz import UTC
 from xmodule.exceptions import InvalidVersionError
 from xmodule.modulestore import PublishState
 from xmodule.modulestore.exceptions import ItemNotFoundError, DuplicateItemError
-from xmodule.modulestore.mongo.base import MongoModuleStore, DIRECT_ONLY_CATEGORIES, DRAFT, as_draft, \
+from xmodule.modulestore.mongo.base import MongoModuleStore, DIRECT_ONLY_CATEGORIES, DRAFT, PUBLISHED, as_draft, \
     as_published
 from opaque_keys.edx.locations import Location
-from xmodule.modulestore.branch_setting import BranchSetting
 
 
 def wrap_draft(item):
@@ -41,11 +40,22 @@ class DraftModuleStore(MongoModuleStore):
     their children) to published modules.
     """
 
+    def __init__(self,
+                 branch_setting=None,
+                 **kwargs
+    ):
+        """
+            :param branch_setting: the default branch setting for this store
+        """
+        super(DraftModuleStore, self).__init__(**kwargs)
+        # default to the 'published' branch
+        self.branch_setting = branch_setting if branch_setting else 'published'
+
     def get_item(self, usage_key, depth=0):
         """
         Returns an XModuleDescriptor instance for the item at usage_key.
 
-        if BranchSetting is draft, returns either draft or published item, preferring draft
+        if branch_setting is draft, returns either draft or published item, preferring draft
         else, returns only the published item
 
         usage_key: A :class:`.UsageKey` instance
@@ -62,7 +72,7 @@ class DraftModuleStore(MongoModuleStore):
             xmodule.modulestore.exceptions.ItemNotFoundError if no object
             is found at that usage_key
         """
-        if BranchSetting.is_draft() and (usage_key.category not in DIRECT_ONLY_CATEGORIES):
+        if (self.branch_setting == DRAFT) and (usage_key.category not in DIRECT_ONLY_CATEGORIES):
             try:
                 return wrap_draft(super(DraftModuleStore, self).get_item(as_draft(usage_key), depth=depth))
             except ItemNotFoundError:
@@ -78,7 +88,7 @@ class DraftModuleStore(MongoModuleStore):
         Returns w/ revision set. If a block has both a draft and non-draft parents, it returns both
         unless revision is set or the thread's branch is set to 'published'.
         '''
-        if BranchSetting.is_published():
+        if self.branch_setting == PUBLISHED:
             revision = 'published'
         return super(DraftModuleStore, self).get_parent_locations(location, revision)
 
@@ -92,19 +102,19 @@ class DraftModuleStore(MongoModuleStore):
         :param metadata: can be empty, the initial metadata for the kvs
         :param system: if you already have an xmodule from the course, the xmodule.system value
         """
-        assert BranchSetting.is_draft()
+        assert self.branch_setting == DRAFT
 
         if location.category not in DIRECT_ONLY_CATEGORIES:
             location = as_draft(location)
         return super(DraftModuleStore, self).create_xmodule(location, definition_data, metadata, system, fields)
 
-    def get_items(self, course_key, settings=None, content=None, **kwargs):
+    def get_items(self, course_key, settings=None, content=None, revision=None, **kwargs):
         """
         Returns:
             list of XModuleDescriptor instances for the matching items within the course with
             the given course_key
 
-            if BranchSetting is draft, returns both draft and publish items, preferring the draft ones
+            if branch_setting is draft, returns both draft and publish items, preferring the draft ones
             else, returns only the published items
 
         NOTE: don't use this to look for courses as the course_key is required. Use get_courses instead.
@@ -118,13 +128,21 @@ class DraftModuleStore(MongoModuleStore):
                 then it searches for the given value in the list not list equivalence.
                 Substring matching pass a regex object.
                 ``name`` is another commonly provided key (Location based stores)
+                revision:
+                    if None, uses the branch setting, as follows:
+                        if the branch setting is 'published', returns only Published items
+                        if the branch setting is 'draft', returns both Draft and Published, but preferring Draft items.
+                    if 'draft-only', returns only Draft items
+                    if 'published', returns only Published items
         """
         draft_items = []
-        if BranchSetting.is_draft():
+        if self.branch_setting == DRAFT and revision != 'published':
             draft_items = [
                 wrap_draft(item) for item in
                 super(DraftModuleStore, self).get_items(course_key, revision='draft', **kwargs)
             ]
+        if revision == 'draft-only':
+            return draft_items
         draft_items_locations = {item.location for item in draft_items}
         non_draft_items = [
             item for item in
@@ -146,7 +164,7 @@ class DraftModuleStore(MongoModuleStore):
             ItemNotFoundError: if the source does not exist
             DuplicateItemError: if the source or any of its descendants already has a draft copy
         """
-        assert BranchSetting.is_draft()
+        assert self.branch_setting == DRAFT
 
         if location.category in DIRECT_ONLY_CATEGORIES:
             raise InvalidVersionError(location)
@@ -188,7 +206,7 @@ class DraftModuleStore(MongoModuleStore):
         In addition to the superclass's behavior, this method converts the unit to draft if it's not
         already draft.
         """
-        assert BranchSetting.is_draft()
+        assert self.branch_setting == DRAFT
 
         if xblock.location.category in DIRECT_ONLY_CATEGORIES:
             return super(DraftModuleStore, self).update_item(xblock, user_id, allow_not_found)
@@ -220,7 +238,7 @@ class DraftModuleStore(MongoModuleStore):
         Args:
             location (UsageKey)
         """
-        assert BranchSetting.is_draft()
+        assert self.branch_setting == DRAFT
 
         # VS[compat] cdodge: This is a hack because static_tabs also have references from the course module, so
         # if we add one then we need to also add it to the policy information (i.e. metadata)
@@ -298,7 +316,7 @@ class DraftModuleStore(MongoModuleStore):
         Raises:
             ItemNotFoundError: if any of the draft subtree nodes aren't found
         """
-        assert BranchSetting.is_draft()
+        assert self.branch_setting == DRAFT
 
         def _internal_depth_first(root_location):
             """
@@ -347,7 +365,7 @@ class DraftModuleStore(MongoModuleStore):
         NOTE: unlike publish, this gives an error if called above the draftable level as it's intended
         to remove things from the published version
         """
-        assert BranchSetting.is_draft()
+        assert self.branch_setting == DRAFT
         self.convert_to_draft(location, user_id, delete_published=True)
 
     def _query_children_for_cache_children(self, course_key, items):

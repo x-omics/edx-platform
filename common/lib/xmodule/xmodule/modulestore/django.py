@@ -11,7 +11,10 @@ from django.conf import settings
 from django.core.cache import get_cache, InvalidCacheBackendError
 import django.utils
 
+import re
+
 from xmodule.modulestore.loc_mapper_store import LocMapperStore
+from xmodule.util.django import get_current_request_hostname
 import xmodule.modulestore
 
 # We may not always have the request_cache module available
@@ -64,6 +67,7 @@ def create_modulestore_instance(engine, doc_store_config, options, i18n_service=
         xblock_select=getattr(settings, 'XBLOCK_SELECT_FUNCTION', None),
         doc_store_config=doc_store_config,
         i18n_service=i18n_service or ModuleI18nService(),
+        branch_setting=_get_modulestore_branch_setting(),
         **_options
     )
 
@@ -156,13 +160,28 @@ class ModuleI18nService(object):
         return strftime_localized(*args, **kwargs)
 
 
-# override the definition in the module's init
-def get_settings_attr(attr, default=None):
+def _get_modulestore_branch_setting():
     """
-    A standin for getattr(settings..) but doesn't require caller to import settings.
-    :param attr:
-    :param default:
+    Returns the branch setting for the module store from the current Django request if configured,
+    else returns the branch value from the configuration settings if set,
+    else returns None
     """
-    return getattr(settings, attr, default)
+    branch = None
 
-xmodule.modulestore.get_settings_attr = get_settings_attr
+    hostname = get_current_request_hostname()
+
+    if hostname:
+        # get mapping information which is defined in configurations
+        mappings = getattr(settings, 'HOSTNAME_MODULESTORE_DEFAULT_MAPPINGS', None)
+
+        # compare hostname against the regex expressions set of mappings which will tell us which branch to use
+        if mappings:
+            for key in mappings.keys():
+                if re.match(key, hostname):
+                    branch = mappings[key]
+                    break
+
+    if branch is None:
+        branch = getattr(settings, 'MODULESTORE_BRANCH', None)
+
+    return branch
