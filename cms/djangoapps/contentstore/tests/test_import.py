@@ -13,13 +13,11 @@ import copy
 from django.contrib.auth.models import User
 
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
-from contentstore.tests.modulestore_config import TEST_MODULESTORE
 
 from xmodule.modulestore.django import modulestore
 from xmodule.contentstore.django import contentstore
 from opaque_keys.edx.locations import SlashSeparatedCourseKey, AssetLocation
 from xmodule.modulestore.xml_importer import import_from_xml
-from xmodule.contentstore.content import StaticContent
 from xmodule.contentstore.django import _CONTENTSTORE
 
 from xmodule.exceptions import NotFoundError
@@ -30,7 +28,7 @@ TEST_DATA_CONTENTSTORE = copy.deepcopy(settings.CONTENTSTORE)
 TEST_DATA_CONTENTSTORE['DOC_STORE_CONFIG']['db'] = 'test_xcontent_%s' % uuid4().hex
 
 
-@override_settings(CONTENTSTORE=TEST_DATA_CONTENTSTORE, MODULESTORE=TEST_MODULESTORE)
+@override_settings(CONTENTSTORE=TEST_DATA_CONTENTSTORE)
 class ContentStoreImportTest(ModuleStoreTestCase):
     """
     Tests that rely on the toy and test_import_course courses.

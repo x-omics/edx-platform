@@ -20,7 +20,6 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 from django.test.utils import override_settings
 
-from contentstore.tests.modulestore_config import TEST_MODULESTORE
 from contentstore.tests.utils import parse_json, AjaxEnabledTestClient
 from contentstore.views.component import ADVANCED_COMPONENT_TYPES
 
@@ -73,7 +72,7 @@ def get_url(handler_name, key_value, key_name='usage_key_string', kwargs=None):
     return reverse_url(handler_name, key_name, key_value, kwargs)
 
 
-@override_settings(CONTENTSTORE=TEST_DATA_CONTENTSTORE, MODULESTORE=TEST_MODULESTORE)
+@override_settings(CONTENTSTORE=TEST_DATA_CONTENTSTORE)
 class ContentStoreTestCase(ModuleStoreTestCase):
     """
     Base class for Content Store Test Cases

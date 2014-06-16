@@ -5,9 +5,7 @@ import unittest
 
 from django.contrib.auth.models import User
 from django.core.management import CommandError, call_command
-from django.test.utils import override_settings
 from contentstore.management.commands.migrate_to_split import Command
-from contentstore.tests.modulestore_config import TEST_MODULESTORE
 from xmodule.modulestore import SPLIT_MONGO_MODULESTORE_TYPE
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
@@ -46,7 +44,6 @@ class TestArgParsing(unittest.TestCase):
 
 
 @unittest.skip("Not fixing split mongo until we land this long branch")
-@override_settings(MODULESTORE=TEST_MODULESTORE)
 class TestMigrateToSplit(ModuleStoreTestCase):
     """
     Unit tests for migrating a course from old mongo to split mongo

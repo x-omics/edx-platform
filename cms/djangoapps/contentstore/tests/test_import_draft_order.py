@@ -1,16 +1,11 @@
-from django.test.utils import override_settings
-
 from xmodule.modulestore.xml_importer import import_from_xml
 
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.django import modulestore
 
-from contentstore.tests.modulestore_config import TEST_MODULESTORE
-
 
 # This test is in the CMS module because the test configuration to use a draft
 # modulestore is dependent on django.
-@override_settings(MODULESTORE=TEST_MODULESTORE)
 class DraftReorderTestCase(ModuleStoreTestCase):
 
     def test_order(self):

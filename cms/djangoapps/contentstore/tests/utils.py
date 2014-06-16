@@ -6,7 +6,6 @@ import json
 
 from django.contrib.auth.models import User
 from django.test.client import Client
-from django.test.utils import override_settings
 
 from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
