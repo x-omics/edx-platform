@@ -207,18 +207,13 @@ class DraftModuleStore(MongoModuleStore):
 
         draft = self.get_item(location)
 
-        # TODO figure out if published_date ever updates correctly
         # If the draft was never published, then it clearly has unpublished changes
-        if not (hasattr(draft, 'published_date') and draft.published_date):
-            print "no pub"
+        if not draft.published_date:
             return True
-
-        print "has pub"
 
         # edited_on may be None if the draft was last edited before edit time tracking
         # If the draft does not have an edit time, we play it safe and assume there are differences
         if draft.edited_on:
-            print "comparing draft@" + str(draft.edited_on) + " to pub@" + str(draft.published_date)
             return draft.edited_on > draft.published_date
         else:
             return True
@@ -238,9 +233,6 @@ class DraftModuleStore(MongoModuleStore):
 
         draft = self.get_item(location)
 
-        print "setting published_date"
-        draft.published_date = datetime.now(UTC)
-        draft.published_by = published_by_id
         if draft.has_children:
             if original_published is not None:
                 # see if children were deleted. 2 reasons for children lists to differ:
@@ -251,7 +243,7 @@ class DraftModuleStore(MongoModuleStore):
                         rents = self.get_parent_locations(child)
                         if (len(rents) == 1 and rents[0] == location):  # the 1 is this original_published
                             self.delete_item(child, True)
-        super(DraftModuleStore, self).update_item(draft, '**replace_user**')
+        super(DraftModuleStore, self).update_item(draft, published_by_id, isPublish=True)
         self.delete_item(location)
 
     def unpublish(self, location):

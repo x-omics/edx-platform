@@ -563,4 +563,6 @@ def _get_module_info(usage_key, rewrite_static_links=True):
         'metadata': own_metadata(module),
         'edited_by': module.edited_by,
         'edited_on': module.edited_on,
+        'published_date': module.published_date,
+        'published_by': module.published_by,
     }

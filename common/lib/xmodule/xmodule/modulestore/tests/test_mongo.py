@@ -8,6 +8,8 @@ import logging
 import shutil
 from tempfile import mkdtemp
 from uuid import uuid4
+from datetime import datetime
+from pytz import UTC
 import unittest
 from xblock.core import XBlock
 
@@ -475,7 +477,7 @@ class TestMongoModuleStore(unittest.TestCase):
         """
         Tests that has_changes() only returns true when changes are present
         """
-        location = Location('edX', 'changes', '2012_Fall', 'html', 'test_html')
+        location = Location('edX', 'changes', '2012_Fall', 'vertical', 'test_vertical')
         dummy_user = 123
 
         # Create a dummy component to test against
@@ -490,7 +492,7 @@ class TestMongoModuleStore(unittest.TestCase):
 
         # Change the component, then check that there now are changes
         component = self.draft_store.get_item(location)
-        component.display_name = component.display_name + ' Changed'
+        component.display_name = 'Changed Display Name'
         self.draft_store.update_item(component, dummy_user)
         self.assertTrue(self.draft_store.has_changes(location))
 
@@ -508,8 +510,9 @@ class TestMongoModuleStore(unittest.TestCase):
         # Create a dummy component to test against
         self.draft_store.create_and_save_xmodule(location, user_id=dummy_user)
 
-        # Store the current edit time
+        # Store the current edit time and verify that dummy_user created the component
         component = self.draft_store.get_item(location)
+        self.assertEqual(component.edited_by, dummy_user)
         old_edited_on = component.edited_on
 
         # Change the component
@@ -520,6 +523,27 @@ class TestMongoModuleStore(unittest.TestCase):
         # Verify the ordering of edit times and that dummy_user made the edit
         self.assertLess(old_edited_on, updated_component.edited_on)
         self.assertEqual(updated_component.edited_by, dummy_user)
+
+    def test_update_published_info(self):
+        """
+        Tests that published_date and published_by are set correctly
+        """
+        location = Location('edX', 'publishInfo', '2012_Fall', 'html', 'test_html')
+        create_user = 123
+        publish_user = 456
+
+        # Create a dummy component to test against
+        self.draft_store.create_and_save_xmodule(location, user_id=create_user)
+
+        # Store the current time, then publish
+        oldTime = datetime.now(UTC)
+        self.draft_store.publish(location, publish_user)
+        updated_component = self.draft_store.get_item(location)
+
+        # Verify the time order and that publish_user caused publication
+        self.assertLessEqual(oldTime, updated_component.published_date)
+        self.assertEqual(updated_component.published_by, publish_user)
+
 
 
 class TestMongoKeyValueStore(object):

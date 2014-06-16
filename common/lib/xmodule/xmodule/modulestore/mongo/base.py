@@ -213,6 +213,8 @@ class CachingDescriptorSystem(MakoDescriptorSystem):
                 edit_info = json_data.get('edit_info', {})
                 module.edited_by = edit_info.get('edited_by')
                 module.edited_on = edit_info.get('edited_on')
+                module.published_date = edit_info.get('published_date')
+                module.published_by = edit_info.get('published_by')
 
                 # decache any computed pending field settings
                 module.save()
@@ -851,7 +853,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
         # layer but added it here to enable quick conversion. I'll need to reconcile these.
         new_object = self.create_xmodule(location, definition_data, metadata, system, fields)
         location = new_object.scope_ids.usage_id
-        self.update_item(new_object, allow_not_found=True)
+        self.update_item(new_object, allow_not_found=True, user_id=user_id)
 
         # VS[compat] cdodge: This is a hack because static_tabs also have references from the course module, so
         # if we add one then we need to also add it to the policy information (i.e. metadata)
@@ -883,11 +885,6 @@ class MongoModuleStore(ModuleStoreWriteBase):
         if the location doesn't exist
         """
 
-        update['edit_info'] = {
-            'edited_on': datetime.now(UTC),
-            'edited_by': user_id,
-        }
-
         # See http://www.mongodb.org/display/DOCS/Updating for
         # atomic update syntax
         result = self.collection.update(
@@ -902,7 +899,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
         if result['n'] == 0:
             raise ItemNotFoundError(location)
 
-    def update_item(self, xblock, user_id=None, allow_not_found=False, force=False):
+    def update_item(self, xblock, user_id=None, allow_not_found=False, force=False, isPublish=False):
         """
         Update the persisted version of xblock to reflect its current values.
 
@@ -911,13 +908,21 @@ class MongoModuleStore(ModuleStoreWriteBase):
         allow_not_found: whether to create a new object if one didn't already exist or give an error
         force: force is meaningless for this modulestore
         """
-        print "has published_date " + str(hasattr(xblock, 'published_date'))
         try:
             definition_data = self._convert_reference_fields_to_strings(xblock, xblock.get_explicitly_set_fields_by_scope())
             payload = {
                 'definition.data': definition_data,
                 'metadata': self._convert_reference_fields_to_strings(xblock, own_metadata(xblock)),
+                'edit_info': {
+                    'edited_on': datetime.now(UTC),
+                    'edited_by': user_id,
+                }
             }
+
+            if isPublish:
+                payload['edit_info']['published_date'] = datetime.now(UTC)
+                payload['edit_info']['published_by'] = user_id
+
             if xblock.has_children:
                 children = self._convert_reference_fields_to_strings(xblock, {'children': xblock.children})
                 payload.update({'definition.children': children['children']})
