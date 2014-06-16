@@ -12,7 +12,6 @@ from django.core.cache import get_cache, InvalidCacheBackendError
 import django.utils
 
 from xmodule.modulestore.loc_mapper_store import LocMapperStore
-from xmodule.modulestore.branch_setting import BranchSetting
 import xmodule.modulestore
 
 # We may not always have the request_cache module available

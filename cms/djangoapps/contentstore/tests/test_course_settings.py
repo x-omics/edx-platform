@@ -11,7 +11,7 @@ from django.test.utils import override_settings
 
 from models.settings.course_details import (CourseDetails, CourseSettingsEncoder)
 from models.settings.course_grading import CourseGradingModel
-from contentstore.utils import get_modulestore, EXTRA_TAB_PANELS, reverse_course_url, reverse_usage_url
+from contentstore.utils import EXTRA_TAB_PANELS, reverse_course_url, reverse_usage_url
 from xmodule.modulestore.tests.factories import CourseFactory
 
 from models.settings.course_metadata import CourseMetadata

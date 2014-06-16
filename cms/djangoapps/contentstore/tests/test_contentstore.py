@@ -20,7 +20,6 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 from django.test.utils import override_settings
 
-from contentstore.utils import get_modulestore
 from contentstore.tests.modulestore_config import TEST_MODULESTORE
 from contentstore.tests.utils import parse_json, AjaxEnabledTestClient
 from contentstore.views.component import ADVANCED_COMPONENT_TYPES

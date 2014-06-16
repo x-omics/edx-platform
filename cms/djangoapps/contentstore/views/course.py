@@ -30,7 +30,6 @@ from contentstore.utils import (
     get_lms_link_for_item,
     add_extra_panel_tab,
     remove_extra_panel_tab,
-    get_modulestore,
     reverse_course_url
 )
 from models.settings.course_details import CourseDetails, CourseSettingsEncoder

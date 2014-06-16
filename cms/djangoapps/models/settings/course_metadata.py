@@ -1,6 +1,5 @@
 from xblock.fields import Scope
 
-from contentstore.utils import get_modulestore
 from cms.lib.xblock.mixin import CmsBlockMixin
 
 

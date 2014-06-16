@@ -1,5 +1,5 @@
 """ Unit tests for checklist methods in views.py. """
-from contentstore.utils import get_modulestore, reverse_course_url
+from contentstore.utils import reverse_course_url
 from contentstore.views.checklist import expand_checklist_action_url
 from xmodule.modulestore.tests.factories import CourseFactory
 

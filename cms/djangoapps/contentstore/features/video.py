@@ -1,7 +1,6 @@
 # pylint: disable=C0111
 
 from lettuce import world, step
-from contentstore.utils import get_modulestore
 from selenium.webdriver.common.keys import Keys
 
 VIDEO_BUTTONS = {

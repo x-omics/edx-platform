@@ -16,7 +16,7 @@ from .utils import CourseTestCase
 import contentstore.git_export_utils as git_export_utils
 from xmodule.contentstore.django import _CONTENTSTORE
 from xmodule.modulestore.django import modulestore
-from contentstore.utils import get_modulestore, reverse_course_url
+from contentstore.utils import reverse_course_url
 
 TEST_DATA_CONTENTSTORE = copy.deepcopy(settings.CONTENTSTORE)
 TEST_DATA_CONTENTSTORE['DOC_STORE_CONFIG']['db'] = 'test_xcontent_%s' % uuid4().hex

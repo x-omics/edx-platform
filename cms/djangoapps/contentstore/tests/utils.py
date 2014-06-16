@@ -11,7 +11,6 @@ from django.test.utils import override_settings
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 from contentstore.tests.modulestore_config import TEST_MODULESTORE
-from contentstore.utils import get_modulestore
 from student.models import Registration
 
 

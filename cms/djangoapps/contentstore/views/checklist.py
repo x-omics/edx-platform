@@ -11,7 +11,7 @@ from django.http import HttpResponseNotFound
 from django.core.exceptions import PermissionDenied
 from opaque_keys.edx.keys import CourseKey
 from xmodule.modulestore.django import modulestore
-from contentstore.utils import get_modulestore, reverse_course_url
+from contentstore.utils import reverse_course_url
 
 from .access import has_course_access
 from xmodule.course_module import CourseDescriptor

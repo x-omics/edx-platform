@@ -28,7 +28,7 @@ def convert_module_store_setting_if_needed(module_store_setting):
         # convert to using mixed module_store
         new_module_store_setting = {
             "default": {
-                "ENGINE": "xmodule.module_store_setting.mixed.MixedModuleStore",
+                "ENGINE": "xmodule.modulestore.mixed.MixedModuleStore",
                 "OPTIONS": {
                     "mappings": {},
                     "reference_type": "Location",

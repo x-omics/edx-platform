@@ -29,8 +29,6 @@ from xmodule.modulestore.inheritance import own_metadata
 from util.json_request import expect_json, JsonResponse
 from util.string_utils import str_to_bool
 
-from ..utils import get_modulestore
-
 from .access import has_course_access
 from .helpers import _xmodule_recurse, xblock_has_own_studio_page
 from contentstore.utils import compute_publish_state

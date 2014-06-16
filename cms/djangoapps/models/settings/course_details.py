@@ -6,7 +6,7 @@ from json.encoder import JSONEncoder
 
 from opaque_keys.edx.locations import Location
 from xmodule.modulestore.exceptions import ItemNotFoundError
-from contentstore.utils import get_modulestore, course_image_url
+from contentstore.utils import course_image_url
 from models.settings import course_grading
 from xmodule.fields import Date
 from xmodule.modulestore.django import modulestore

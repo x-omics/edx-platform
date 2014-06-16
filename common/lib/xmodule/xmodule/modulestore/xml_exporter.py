@@ -141,6 +141,9 @@ def export_to_xml(modulestore, contentstore, course_key, root_dir, course_dir):
             # Don't try to export orphaned items.
             if len(parent_locs) > 0:
                 logging.debug('parent_locs = {0}'.format(parent_locs))
+                # NAATODO - This code arbitrarily uses the first parent found, which may not be the
+                # draft parent.  If the child has moved indices in the draft parent, wouldn't this
+                # have an unexpected result?
                 draft_vertical.xml_attributes['parent_sequential_url'] = parent_locs[0].to_deprecated_string()
                 sequential = modulestore.get_item(parent_locs[0])
                 index = sequential.children.index(draft_vertical.location)

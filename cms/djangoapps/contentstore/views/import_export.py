@@ -334,6 +334,7 @@ def export_handler(request, course_key_string):
             parent = None
             try:
                 failed_item = modulestore().get_item(exc.location)
+                # NAATODO - do we need to specify a 'revision' in this get_parent_locations call?
                 parent_locs = modulestore().get_parent_locations(failed_item.location)
 
                 if len(parent_locs) > 0:
