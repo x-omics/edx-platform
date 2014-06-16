@@ -75,6 +75,7 @@ class XBlockImportTest(ModuleStoreTestCase):
         self.assertEqual(xblock.test_field, expected_field_val)
 
         if has_draft:
-            draft_xblock = self.draft_store.get_item(xblock_location)
+            draft_xblock = self.store.get_item(xblock_location)
+            self.assertTrue(getattr(draft_xblock, 'is_draft', False))
             self.assertTrue(isinstance(draft_xblock, StubXBlock))
             self.assertEqual(draft_xblock.test_field, expected_field_val)
