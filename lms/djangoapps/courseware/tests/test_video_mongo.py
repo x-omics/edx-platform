@@ -498,7 +498,7 @@ class VideoDescriptorTest(VideoDescriptorTestBase):
     Tests for video descriptor that requires access to django settings.
     """
     def setUp(self):
-        super(VideDescriptorTest, self).setUp()
+        super(VideoDescriptorTest, self).setUp()
         self.descriptor.runtime.handler_url = MagicMock()
 
     def test_get_context(self):

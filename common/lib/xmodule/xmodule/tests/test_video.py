@@ -33,7 +33,7 @@ def instantiate_descriptor(**field_data):
     """
     system = get_test_descriptor_system()
     course_key = SlashSeparatedCourseKey('org', 'course', 'run')
-    usage_key = course_key.make_usage_key('video', 'name')
+    usage_key = course_key.make_usage_key('video', 'SampleProblem')
     return system.construct_xblock_from_class(
         VideoDescriptor,
         scope_ids=ScopeIds(None, None, usage_key, usage_key),
@@ -505,7 +505,7 @@ class VideoExportTestCase(VideoDescriptorTestBase):
 
         xml = self.descriptor.definition_to_xml(None)  # We don't use the `resource_fs` parameter
         expected = etree.fromstring('''\
-         <video url_name="SampleProblem1" start_time="0:00:01" youtube="0.75:izygArpw-Qo,1.00:p2Q6BrNhdh8,1.25:1EeWXzPdhSA,1.50:rABDYkeK0x8" show_captions="false" end_time="0:01:00" download_video="true" download_track="true">
+         <video url_name="SampleProblem" start_time="0:00:01" youtube="0.75:izygArpw-Qo,1.00:p2Q6BrNhdh8,1.25:1EeWXzPdhSA,1.50:rABDYkeK0x8" show_captions="false" end_time="0:01:00" download_video="true" download_track="true">
            <source src="http://www.example.com/source.mp4"/>
            <source src="http://www.example.com/source.ogg"/>
            <track src="http://www.example.com/track"/>
@@ -532,9 +532,9 @@ class VideoExportTestCase(VideoDescriptorTestBase):
         self.descriptor.html5_sources = ['http://www.example.com/source.mp4', 'http://www.example.com/source.ogg']
         self.descriptor.download_video = True
 
-        xml = self.desc.definition_to_xml(None)  # We don't use the `resource_fs` parameter
+        xml = self.descriptor.definition_to_xml(None)  # We don't use the `resource_fs` parameter
         expected = etree.fromstring('''\
-         <video url_name="SampleProblem1" start_time="0:00:05" youtube="0.75:izygArpw-Qo,1.00:p2Q6BrNhdh8,1.25:1EeWXzPdhSA,1.50:rABDYkeK0x8" show_captions="false" download_video="true" download_track="true">
+         <video url_name="SampleProblem" start_time="0:00:05" youtube="0.75:izygArpw-Qo,1.00:p2Q6BrNhdh8,1.25:1EeWXzPdhSA,1.50:rABDYkeK0x8" show_captions="false" download_video="true" download_track="true">
            <source src="http://www.example.com/source.mp4"/>
            <source src="http://www.example.com/source.ogg"/>
            <track src="http://www.example.com/track"/>
@@ -548,5 +548,5 @@ class VideoExportTestCase(VideoDescriptorTestBase):
         Test XML export with defaults.
         """
         xml = self.descriptor.definition_to_xml(None)
-        expected = '<video url_name="SampleProblem1"/>\n'
+        expected = '<video url_name="SampleProblem"/>\n'
         self.assertEquals(expected, etree.tostring(xml, pretty_print=True))
