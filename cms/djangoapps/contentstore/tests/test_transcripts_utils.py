@@ -193,21 +193,17 @@ class TestDownloadYoutubeSubs(ModuleStoreTestCase):
                     <text start="5.43" dur="1.73">Test text 3.</text>
                 </transcript>
         """)
-        good_youtube_subs = {
-            0.5: 'good_id_1',
+        good_youtube_sub = {
             1.0: 'good_id_2',
-            2.0: 'good_id_3'
         }
         self.clear_subs_content(good_youtube_subs)
 
         with patch('xmodule.video_module.transcripts_utils.requests.get') as mock_get:
             mock_get.return_value = Mock(status_code=200, text=response, content=response)
             # Check transcripts_utils.GetTranscriptsFromYouTubeException not thrown
-            transcripts_utils.download_youtube_subs(good_youtube_subs, self.course, settings)
+            transcripts_utils.download_youtube_subs(good_youtube_subs[1.0], self.course, settings)
 
-        mock_get.assert_any_call('http://video.google.com/timedtext', params={'lang': 'en', 'v': 'good_id_1'})
         mock_get.assert_any_call('http://video.google.com/timedtext', params={'lang': 'en', 'v': 'good_id_2'})
-        mock_get.assert_any_call('http://video.google.com/timedtext', params={'lang': 'en', 'v': 'good_id_3'})
 
         # Check assets status after importing subtitles.
         for subs_id in good_youtube_subs.values():
@@ -236,13 +232,11 @@ class TestDownloadYoutubeSubs(ModuleStoreTestCase):
         mock_get.return_value = Mock(status_code=404, text='Error 404')
 
         bad_youtube_subs = {
-            0.5: 'BAD_YOUTUBE_ID1',
             1.0: 'BAD_YOUTUBE_ID2',
-            2.0: 'BAD_YOUTUBE_ID3'
         }
         self.clear_subs_content(bad_youtube_subs)
         with self.assertRaises(transcripts_utils.GetTranscriptsFromYouTubeException):
-            transcripts_utils.download_youtube_subs(bad_youtube_subs, self.course, settings)
+            transcripts_utils.download_youtube_subs(bad_youtube_subs[1.0], self.course, settings)
 
         # Check assets status after importing subtitles.
         for subs_id in bad_youtube_subs.values():
@@ -268,7 +262,7 @@ class TestDownloadYoutubeSubs(ModuleStoreTestCase):
         self.clear_subs_content(good_youtube_subs)
 
         # Check transcripts_utils.GetTranscriptsFromYouTubeException not thrown
-        transcripts_utils.download_youtube_subs(good_youtube_subs, self.course, settings)
+        transcripts_utils.download_youtube_subs(good_youtube_subs[1.0], self.course, settings)
 
         # Check assets status after importing subtitles.
         for subs_id in good_youtube_subs.values():
