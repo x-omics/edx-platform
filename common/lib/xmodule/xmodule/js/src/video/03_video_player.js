@@ -411,16 +411,6 @@ function (HTML5Video, Resizer) {
         }
 
         newSpeed = parseFloat(newSpeed).toFixed(2).replace(/\.00$/, '.0');
-
-        this.videoPlayer.log(
-            'speed_change_video',
-            {
-                current_time: time,
-                old_speed: this.speed,
-                new_speed: newSpeed
-            }
-        );
-
         this.setSpeed(newSpeed, true);
         this.videoPlayer.setPlaybackRate(newSpeed);
         this.saveState(true, { speed: newSpeed });
@@ -442,15 +432,6 @@ function (HTML5Video, Resizer) {
         }
 
         this.videoPlayer.seekTo(time);
-
-        this.videoPlayer.log(
-            'seek_video',
-            {
-                old_time: this.videoPlayer.currentTime,
-                new_time: time,
-                type: type
-            }
-        );
     }
 
     function seekTo(time) {
