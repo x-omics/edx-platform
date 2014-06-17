@@ -134,9 +134,6 @@ class TestXmlCoursesLoad(ModuleStoreTestCase, PageLoaderTestCase):
         self.check_all_pages_load(SlashSeparatedCourseKey('edX', 'toy', '2012_Fall'))
 
 
-# Importing XML courses isn't possible with MixedModuleStore,
-# so we use a Mongo modulestore directly (as we would in Studio)
-@override_settings(MODULESTORE=TEST_DATA_MONGO_MODULESTORE)
 class TestMongoCoursesLoad(ModuleStoreTestCase, PageLoaderTestCase):
     """
     Check that all pages in test courses load properly from Mongo.
@@ -163,7 +160,6 @@ class TestMongoCoursesLoad(ModuleStoreTestCase, PageLoaderTestCase):
         self.assertGreater(len(course.textbooks), 0)
 
 
-@override_settings(MODULESTORE=TEST_DATA_DRAFT_MONGO_MODULESTORE)
 class TestDraftModuleStore(ModuleStoreTestCase):
     def test_get_items_with_course_items(self):
         store = modulestore()
