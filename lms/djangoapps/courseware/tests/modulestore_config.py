@@ -27,6 +27,5 @@ MAPPINGS = {
 TEST_DATA_MIXED_MODULESTORE = mixed_store_config(TEST_DATA_DIR, MAPPINGS)
 
 # All store requests now go through mixed
-# NAATODO - get rid of these constants?
-TEST_DATA_DRAFT_MONGO_MODULESTORE = TEST_DATA_MIXED_MODULESTORE
-TEST_DATA_MONGO_MODULESTORE = TEST_DATA_MIXED_MODULESTORE
+# Some tests require that no XML courses exist. So provide the following constant with no course Mappings.
+TEST_DATA_MONGO_MODULESTORE = mixed_store_config(TEST_DATA_DIR, {})
