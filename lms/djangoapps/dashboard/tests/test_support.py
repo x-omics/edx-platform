@@ -1,3 +1,6 @@
+"""
+Tests for support dashboard
+"""
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from django.test.client import Client
 from django.test.utils import override_settings
@@ -46,6 +49,7 @@ class RefundTests(ModuleStoreTestCase):
         Order.objects.filter(user=self.student).delete()
 
     def _enroll(self, purchase=True):
+        # pylint: disable=C0111
         CourseEnrollment.enroll(self.student, self.course_id, self.course_mode.mode_slug)
         if purchase:
             self.order = Order.get_cart_for_user(self.student)
@@ -102,7 +106,7 @@ class RefundTests(ModuleStoreTestCase):
         pars['confirmed'] = 'true'
         response = self.client.post('/support/refund/', pars)
         self.assertTrue(response.status_code, 302)
-        response = self.client.get(response.get('location'))
+        response = self.client.get(response.get('location'))  # pylint: disable=E1103
 
         self.assertContains(response, "Unenrolled %s from" % self.student)
         self.assertContains(response, "Refunded 1 for order id")

@@ -1,3 +1,6 @@
+"""
+URLs for support dashboard
+"""
 from django.conf.urls import patterns, url
 from django.contrib.auth.decorators import permission_required
 

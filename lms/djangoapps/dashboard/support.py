@@ -18,12 +18,18 @@ from opaque_keys.edx.locations import SlashSeparatedCourseKey
 log = logging.getLogger(__name__)
 
 
-class RefundForm(forms.Form):
+class RefundForm(forms.Form):  # pylint: disable=R0924
+    """
+    Form for manual refunds
+    """
     user = forms.EmailField(label=_("Email Address"), required=True)
     course_id = forms.CharField(label=_("Course ID"), required=True)
     confirmed = forms.CharField(widget=forms.HiddenInput, required=False)
 
     def clean_user(self):
+        """
+        validate user field
+        """
         user_email = self.cleaned_data['user']
         try:
             user = User.objects.get(email=user_email)
@@ -32,6 +38,9 @@ class RefundForm(forms.Form):
         return user
 
     def clean_course_id(self):
+        """
+        validate course id field
+        """
         course_id = self.cleaned_data['course_id']
         try:
             course_key = CourseKey.from_string(course_id)
@@ -43,6 +52,9 @@ class RefundForm(forms.Form):
         return course_key
 
     def clean(self):
+        """
+        clean form
+        """
         user, course_id = self.cleaned_data.get('user'), self.cleaned_data.get('course_id')
         if user and course_id:
             self.cleaned_data['enrollment'] = enrollment = CourseEnrollment.get_or_create_enrollment(user, course_id)
@@ -55,6 +67,9 @@ class RefundForm(forms.Form):
         return self.cleaned_data
 
     def is_valid(self):
+        """
+        returns whether form is valid
+        """
         is_valid = super(RefundForm, self).is_valid()
         if is_valid and self.cleaned_data.get('confirmed') != 'true':
             # this is a two-step form: first look up the data, then issue the refund.
@@ -68,15 +83,24 @@ class RefundForm(forms.Form):
 
 
 class SupportDash(TemplateView):
+    """
+    Support dashboard view
+    """
     template_name = 'dashboard/support.html'
 
 
 class Refund(FormView):
+    """
+    Refund form view
+    """
     template_name = 'dashboard/_dashboard_refund.html'
     form_class = RefundForm
     success_url = '/support/'
 
     def get_context_data(self, **kwargs):
+        """
+        extra context data to add to page
+        """
         form = getattr(kwargs['form'], 'cleaned_data', {})
         if form.get('confirmed') == 'true':
             kwargs['cert'] = form.get('cert')
@@ -84,6 +108,9 @@ class Refund(FormView):
         return kwargs
 
     def form_valid(self, form):
+        """
+        unenrolls student, issues refund
+        """
         user = form.cleaned_data['user']
         course_id = form.cleaned_data['course_id']
         enrollment = form.cleaned_data['enrollment']
