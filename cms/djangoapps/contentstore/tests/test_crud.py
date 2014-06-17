@@ -4,7 +4,8 @@ from xmodule import templates
 from xmodule.modulestore import SPLIT_MONGO_MODULESTORE_TYPE
 from xmodule.modulestore.tests import persistent_factories
 from xmodule.course_module import CourseDescriptor
-from xmodule.modulestore.django import modulestore, loc_mapper, clear_existing_modulestores
+from xmodule.modulestore.django import modulestore, clear_existing_modulestores, _MIXED_MODULESTORE, \
+    loc_mapper, _loc_singleton
 from xmodule.seq_module import SequenceDescriptor
 from xmodule.capa_module import CapaDescriptor
 from opaque_keys.edx.locator import BlockUsageLocator, LocalId
@@ -224,23 +225,38 @@ class TemplateTests(unittest.TestCase):
         version_history = self.split_store.get_block_generations(second_problem.location)
         self.assertNotEqual(version_history.locator.version_guid, first_problem.location.version_guid)
 
+
+# NAATODO - Verify new life-management of split and loc_mapper
+class SplitAndLocMapperTests(unittest.TestCase):
+    """
+    Test injection of loc_mapper into Split
+    """
     def test_split_inject_loc_mapper(self):
         """
-        Test that creating a loc_mapper causes it to automatically attach to the split mongo store
+        Test loc_mapper created before split
         """
+        # ensure modulestore is not instantiated
+        self.assertIsNone(_MIXED_MODULESTORE)
+
         # instantiate location mapper before split
         mapper = loc_mapper()
-        # split must inject the location mapper itself since the mapper existed before it did
-        self.assertEqual(self.split_store.loc_mapper, mapper)
+
+        # instantiate mixed modulestore and thus split
+        split_store = modulestore()._get_modulestore_by_type(SPLIT_MONGO_MODULESTORE_TYPE)
+
+        # split must inject the same location mapper object since the mapper existed before it did
+        self.assertEqual(split_store.loc_mapper, mapper)
 
     def test_loc_inject_into_split(self):
         """
-        Test that creating a loc_mapper causes it to automatically attach to the split mongo store
+        Test split created before loc_mapper
         """
-        # force instantiation of split modulestore before there's a location mapper and verify
-        # it has no pointer to loc mapper
-        self.assertIsNone(self.split_store.loc_mapper)
-        # force instantiation of location mapper which must inject itself into the split
-        mapper = loc_mapper()
-        self.assertEqual(self.split_store.loc_mapper, mapper)
+        # ensure loc_mapper is not instantiated
+        self.assertIsNone(_loc_singleton)
 
+        # instantiate split before location mapper
+        split_store = modulestore()._get_modulestore_by_type(SPLIT_MONGO_MODULESTORE_TYPE)
+
+        # split must have instantiated loc_mapper
+        mapper = loc_mapper()
+        self.assertEqual(split_store.loc_mapper, mapper)
