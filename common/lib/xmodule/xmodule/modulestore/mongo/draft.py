@@ -78,7 +78,7 @@ class DraftModuleStore(MongoModuleStore):
         else:
             return super(DraftModuleStore, self).get_item(usage_key, depth=depth)
 
-    def get_parent_locations(self, location, revision=None):
+    def get_parent_locations(self, location, revision=None, **kwargs):
         '''
         Find all locations that are the parents of this location in this
         course.  Needed for path_to_location().
@@ -88,7 +88,7 @@ class DraftModuleStore(MongoModuleStore):
         '''
         if self.branch_setting == PUBLISHED:
             revision = 'published'
-        return super(DraftModuleStore, self).get_parent_locations(location, revision)
+        return super(DraftModuleStore, self).get_parent_locations(location, revision, **kwargs)
 
     def create_xmodule(self, location, definition_data=None, metadata=None, system=None, fields={}):
         """

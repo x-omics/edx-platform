@@ -937,7 +937,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
                         value[key] = subvalue.to_deprecated_string()
         return jsonfields
 
-    def get_parent_locations(self, location, revision=None):
+    def get_parent_locations(self, location, revision=None, **kwargs):
         '''
         Find all locations that are the parents of this location in this
         course.  Needed for path_to_location().
