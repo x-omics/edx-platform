@@ -146,7 +146,9 @@ class ModuleStoreTestCase(TestCase):
         """
         If using a Mongo-backed modulestore & contentstore, drop the collections.
         """
-        store = modulestore()._get_modulestore_by_type(modulestore_type)  # pylint: disable=W0212
+        store = modulestore()
+        if hasattr(store, '_get_modulestore_by_type'):
+            store = store._get_modulestore_by_type(modulestore_type)  # pylint: disable=W0212
         if hasattr(store, 'collection'):
             connection = store.collection.database.connection
             store.collection.drop()
