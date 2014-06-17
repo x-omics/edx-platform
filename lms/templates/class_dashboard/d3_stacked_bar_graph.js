@@ -351,8 +351,9 @@ edx_d3CreateStackedBarGraph = function(parameters, svg, divTooltip) {
 
         // Construct the tooltip
         if (d.tooltip['type'] == 'subsection') {
-          tooltip_str = d.tooltip['num_students'] + ' ' + gettext('student(s) opened Subsection') +  ' ' \
-                      + d.tooltip['subsection_num'] + ': ' + d.tooltip['subsection_name'] 
+	   stud_str = ngettext('%(num_students)s student opened Subsection', '%(num_students)s students opened Subsection', d.tooltip['num_students']);
+	   stud_str = interpolate(stud_str, {'num_students': d.tooltip['num_students']}, true);
+          tooltip_str = stud_str +  ' '  + d.tooltip['subsection_num'] + ': ' + d.tooltip['subsection_name'];
         }else if (d.tooltip['type'] == 'problem') {
           tooltip_str = d.tooltip['label'] + ' ' + d.tooltip['problem_name'] + ' - ' \
                       + d.tooltip['count_grade'] + ' ' + gettext('students') + ' (' \
