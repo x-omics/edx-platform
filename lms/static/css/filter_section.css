@@ -21,7 +21,7 @@ li a:hover, li a:active{color:#ff7a31;}
 
 .course-content .filter{ height:auto; width:100%; position:absolute; background:#f7f7f7; left:0;top:0; line-height:40px; border: 1px solid #dddddd; height:40px;}
 .course-content .filter-title{ height: 40px; width: 150px; position: absolute; background: #f7f7f7; left: 0; top: 0; }
-.course-content .filter-title span{ font-weight:bold; color:#ff7a31;padding-left:10px;}
+.course-content .filter-title span{ font-weight:bold;padding-left:10px;}
 .course-content .filter-ul{ height:auto; width:80%; position: absolute; background: #f7f7f7; left: 150px; top: 0; }
 .course-content #searbar{  }
 .course-content #searbar li{ float: left; margin: -13px 0 0 10px; }
