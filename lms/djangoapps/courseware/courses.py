@@ -50,6 +50,7 @@ def get_course(course_id, depth=0):
     depth: The number of levels of children for the modulestore to cache.
     None means infinite depth.  Default is to fetch no children.
     """
+    log.info(course_id)
     course = modulestore().get_course(course_id, depth=depth)
     if course is None:
         raise ValueError(u"Course not found: {0}".format(course_id))
@@ -323,6 +324,35 @@ def get_courses(user, domain=None):
     courses = [c for c in courses if has_access(user, 'see_exists', c)]
 
     courses = sorted(courses, key=lambda course: course.number)
+
+    return courses
+
+def get_courses_by_search(search_text, user, domain=None):
+    
+    courses = branding.get_visible_courses()
+    temp_courses = []
+
+    for c in courses:
+        if (c.display_name.find(search_text) != -1 and has_access(user, 'see_exists', c)):
+            
+            temp_courses.append(c)
+    
+    courses = sorted(temp_courses, key=lambda course: course.display_name)
+
+    return courses
+
+def filter_courses_by_category(category, user, domain=None):
+    
+    courses = branding.get_visible_courses()
+    temp_courses = []
+
+    for c in courses:
+        if (has_access(user, 'see_exists', c) and (category == 'all')):
+            temp_courses.append(c)
+        elif (sub_category != 'all' and c.category == category):
+            temp_courses.append(c)
+    
+    courses = sorted(temp_courses, key=lambda course: course.display_name)
 
     return courses
 

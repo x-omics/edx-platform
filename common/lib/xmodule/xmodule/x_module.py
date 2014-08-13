@@ -191,6 +191,15 @@ class XModuleMixin(XBlockMixin):
         default=None
     )
 
+    course_category = String(
+        display_name="Course Category",
+        help="This name appears in the horizontal navigation at the top of the page.",
+        scope=Scope.settings,
+        # it'd be nice to have a useful default but it screws up other things; so,
+        # use display_name_with_default for those
+        default=None
+    )
+
     @property
     def system(self):
         """
@@ -232,6 +241,16 @@ class XModuleMixin(XBlockMixin):
         if name is None:
             name = self.url_name.replace('_', ' ')
         return name
+
+    @property
+    def display_category_with_default(self):
+        """
+        Return a course category for the module: use course_category if defined
+        in metadata, otherwise return None
+        """
+        course_category = self.course_category
+
+        return course_category
 
     @property
     def xblock_kvs(self):

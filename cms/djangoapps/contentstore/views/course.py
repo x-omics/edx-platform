@@ -297,6 +297,7 @@ def create_new_course(request):
     org = request.json.get('org')
     number = request.json.get('number')
     display_name = request.json.get('display_name')
+    course_category = request.json.get('course_category')
     run = request.json.get('run')
 
     # allow/disable unicode characters in course_id according to settings
@@ -312,10 +313,10 @@ def create_new_course(request):
 
         # instantiate the CourseDescriptor and then persist it
         # note: no system to pass
-        if display_name is None:
+        if display_name is None and course_category is None:
             metadata = {}
         else:
-            metadata = {'display_name': display_name}
+            metadata = {'display_name': display_name, 'course_category': course_category}
 
         # Set a unique wiki_slug for newly created courses. To maintain active wiki_slugs for
         # existing xml courses this cannot be changed in CourseDescriptor.

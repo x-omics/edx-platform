@@ -5,6 +5,7 @@ Courseware views functions
 import logging
 import urllib
 import json
+import re
 
 from collections import defaultdict
 from django.utils.translation import ugettext as _
@@ -26,7 +27,7 @@ from markupsafe import escape
 
 from courseware import grades
 from courseware.access import has_access
-from courseware.courses import get_courses, get_course, get_studio_url, get_course_with_access, sort_by_announcement
+from courseware.courses import get_courses, get_course, get_studio_url, get_course_with_access, sort_by_announcement, get_courses_by_search, filter_courses_by_category
 from courseware.masquerade import setup_masquerade
 from courseware.model_data import FieldDataCache
 from .module_render import toc_for_course, get_module_for_descriptor, get_module
@@ -86,11 +87,39 @@ def courses(request):
     """
     Render "find courses" page.  The course selection work is done in courseware.courses.
     """
+
+    # keywords = request.GET.get('search', '') 
+    # subject = request.GET.get('subject', '')  
+    # log.info(subject)
+    # courses = get_courses_by_search(keywords, subject, request.META.get('HTTP_HOST'))
     courses = get_courses(request.user, request.META.get('HTTP_HOST'))
     courses = sort_by_announcement(courses)
 
     return render_to_response("courseware/courses.html", {'courses': courses})
 
+def find_course_by_search(request):
+    """
+    Render "find courses" page.  The course selection work is done in courseware.courses.
+    """
+    user = request.user
+    metadata = request.META.get('HTTP_HOST')
+    search_text = request.GET['search']
+
+    courses = get_courses_by_search(search_text, user, metadata)
+    
+    return render_to_response("courseware/courses.html", {'courses': courses})
+
+def find_courses_by_category(request):
+    """
+    Render "find courses" page.  The course selection work is done in courseware.courses.
+    """
+    user = request.user
+    metadata = request.META.get('HTTP_HOST')
+    category = request.GET['subject']
+
+    courses = filter_courses_by_category(category, user, metadata)
+    
+    return render_to_response("courseware/courses.html", {'courses': courses})
 
 def render_accordion(request, course, chapter, section, field_data_cache):
     """

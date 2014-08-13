@@ -97,6 +97,20 @@ require(["domReady!", "jquery", "jquery.form", "js/index"], function(doc, $) {
                   <span class="tip">${_("The public display name for your course. This cannot be changed, but you can set a different display name in Advanced Settings later.")}</span>
                   <span class="tip tip-error is-hiding"></span>
                 </li>
+                <li class="field text required" id="field-course-category">
+                  <label for="new-course-category">${_("Course category")}</label>
+                  <select class="new-course-category" id="new-course-category" name='new-course-category' aria-required='false'>
+                      <option value="Biological">生物</option>
+                      <option value="Health">医学健康</option>
+                      <option value="Analysis">数据分析</option>
+                      <option value="Computer">计算机</option>
+                      <option value="Social">社会科学</option>
+                      <option value="Ethics">伦理哲思</option>
+                      <option value="Others">其他</option>
+                  </select>
+                  <span class="tip">${_("The Course category for your course.")}</span>
+                  <span class="tip tip-error is-hiding"></span>
+                </li>
                 <li class="field text required" id="field-organization">
                   <label for="new-course-org">${_("Organization")}</label>
                   <input class="new-course-org" id="new-course-org" type="text" name="new-course-org" aria-required="true" placeholder="${_('e.g. UniversityX or OrganizationX')}" />
