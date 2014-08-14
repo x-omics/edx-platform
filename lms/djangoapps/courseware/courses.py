@@ -349,7 +349,7 @@ def filter_courses_by_category(category, user, domain=None):
     for c in courses:
         if (has_access(user, 'see_exists', c) and (category == 'all')):
             temp_courses.append(c)
-        elif (sub_category != 'all' and c.category == category):
+        elif (has_access(user, 'see_exists', c) and category == c.course_category):
             temp_courses.append(c)
     
     courses = sorted(temp_courses, key=lambda course: course.display_name)

@@ -119,7 +119,7 @@ def find_courses_by_category(request):
 
     courses = filter_courses_by_category(category, user, metadata)
     
-    return render_to_response("courseware/courses.html", {'courses': courses})
+    return render_to_response("courseware/filter.html", {'courses': courses})
 
 def render_accordion(request, course, chapter, section, field_data_cache):
     """
