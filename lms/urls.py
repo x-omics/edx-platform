@@ -74,7 +74,7 @@ urlpatterns = ('',  # nopep8
     url(r'^submit_feedback$', 'util.views.submit_feedback'),
 
     # Find Course by Name
-    url(r'^find_course_by_search$', 'courseware.views.find_course_by_search', name="find_course_by_search"),
+    url(r'^find_courses_by_search$', 'courseware.views.find_courses_by_search', name="find_courses_by_search"),
     url(r'^find_courses_by_category$', 'courseware.views.find_courses_by_category', name="find_courses_by_category"),
 )
 

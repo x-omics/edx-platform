@@ -88,16 +88,12 @@ def courses(request):
     Render "find courses" page.  The course selection work is done in courseware.courses.
     """
 
-    # keywords = request.GET.get('search', '') 
-    # subject = request.GET.get('subject', '')  
-    # log.info(subject)
-    # courses = get_courses_by_search(keywords, subject, request.META.get('HTTP_HOST'))
     courses = get_courses(request.user, request.META.get('HTTP_HOST'))
     courses = sort_by_announcement(courses)
 
     return render_to_response("courseware/courses.html", {'courses': courses})
 
-def find_course_by_search(request):
+def find_courses_by_search(request):
     """
     Render "find courses" page.  The course selection work is done in courseware.courses.
     """
