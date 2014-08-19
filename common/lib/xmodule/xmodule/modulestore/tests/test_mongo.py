@@ -31,13 +31,11 @@ from xmodule.modulestore.xml_exporter import export_to_xml
 from xmodule.modulestore.xml_importer import import_from_xml, perform_xlint
 from xmodule.contentstore.mongo import MongoContentStore
 
-from xmodule.modulestore.tests.test_modulestore import check_path_to_location
 from nose.tools import assert_in
 from xmodule.exceptions import NotFoundError
 from git.test.lib.asserts import assert_not_none
 from xmodule.x_module import XModuleMixin
 from xmodule.modulestore.mongo.base import as_draft
-from xmodule.modulestore.tests.factories import check_mongo_calls
 
 
 log = logging.getLogger(__name__)
@@ -244,11 +242,6 @@ class TestMongoModuleStore(unittest.TestCase):
         assert_not_none(
             self.draft_store._find_one(Location('edX', 'toy', '2012_Fall', 'video', 'Welcome')),
         )
-
-    def test_path_to_location(self):
-        '''Make sure that path_to_location works'''
-        with check_mongo_calls(self.draft_store, 9):
-            check_path_to_location(self.draft_store)
 
     def test_xlinter(self):
         '''
@@ -508,56 +501,6 @@ class TestMongoModuleStore(unittest.TestCase):
         finally:
             shutil.rmtree(root_dir)
 
-    def test_has_changes_direct_only(self):
-        """
-        Tests that has_changes() returns false when a new xblock in a direct only category is checked
-        """
-        course_location = Location('edX', 'toy', '2012_Fall', 'course', '2012_Fall')
-        chapter_location = Location('edX', 'toy', '2012_Fall', 'chapter', 'vertical_container')
-
-        # Create dummy direct only xblocks
-        self.draft_store.create_item(
-            self.dummy_user,
-            chapter_location.course_key,
-            chapter_location.block_type,
-            block_id=chapter_location.block_id
-        )
-
-        # Check that neither xblock has changes
-        self.assertFalse(self.draft_store.has_changes(course_location))
-        self.assertFalse(self.draft_store.has_changes(chapter_location))
-
-    def test_has_changes(self):
-        """
-        Tests that has_changes() only returns true when changes are present
-        """
-        location = Location('edX', 'toy', '2012_Fall', 'vertical', 'test_vertical')
-
-        # Create a dummy component to test against
-        self.draft_store.create_item(
-            self.dummy_user,
-            location.course_key,
-            location.block_type,
-            block_id=location.block_id
-        )
-
-        # Not yet published, so changes are present
-        self.assertTrue(self.draft_store.has_changes(location))
-
-        # Publish and verify that there are no unpublished changes
-        self.draft_store.publish(location, self.dummy_user)
-        self.assertFalse(self.draft_store.has_changes(location))
-
-        # Change the component, then check that there now are changes
-        component = self.draft_store.get_item(location)
-        component.display_name = 'Changed Display Name'
-        self.draft_store.update_item(component, self.dummy_user)
-        self.assertTrue(self.draft_store.has_changes(location))
-
-        # Publish and verify again
-        self.draft_store.publish(location, self.dummy_user)
-        self.assertFalse(self.draft_store.has_changes(location))
-
     def test_has_changes_missing_child(self):
         """
         Tests that has_changes() returns False when a published parent points to a child that doesn't exist.
@@ -572,10 +515,10 @@ class TestMongoModuleStore(unittest.TestCase):
             block_id=location.block_id
         )
         parent.children += [Location('edX', 'toy', '2012_Fall', 'vertical', 'does_not_exist')]
-        self.draft_store.update_item(parent, self.dummy_user)
+        parent = self.draft_store.update_item(parent, self.dummy_user)
 
         # Check the parent for changes should return False and not throw an exception
-        self.assertFalse(self.draft_store.has_changes(location))
+        self.assertFalse(self.draft_store.has_changes(parent))
 
     def _create_test_tree(self, name, user_id=None):
         """
@@ -626,6 +569,11 @@ class TestMongoModuleStore(unittest.TestCase):
 
         return locations
 
+    def _has_changes(self, location):
+        """ Helper that returns True if location has changes, False otherwise """
+        store = self.draft_store
+        return store.has_changes(store.get_item(location))
+
     def test_has_changes_ancestors(self):
         """
         Tests that has_changes() returns true on ancestors when a child is changed
@@ -634,7 +582,7 @@ class TestMongoModuleStore(unittest.TestCase):
 
         # Verify that there are no unpublished changes
         for key in locations:
-            self.assertFalse(self.draft_store.has_changes(locations[key]))
+            self.assertFalse(self._has_changes(locations[key]))
 
         # Change the child
         child = self.draft_store.get_item(locations['child'])
@@ -642,18 +590,18 @@ class TestMongoModuleStore(unittest.TestCase):
         self.draft_store.update_item(child, user_id=self.dummy_user)
 
         # All ancestors should have changes, but not siblings
-        self.assertTrue(self.draft_store.has_changes(locations['grandparent']))
-        self.assertTrue(self.draft_store.has_changes(locations['parent']))
-        self.assertTrue(self.draft_store.has_changes(locations['child']))
-        self.assertFalse(self.draft_store.has_changes(locations['parent_sibling']))
-        self.assertFalse(self.draft_store.has_changes(locations['child_sibling']))
+        self.assertTrue(self._has_changes(locations['grandparent']))
+        self.assertTrue(self._has_changes(locations['parent']))
+        self.assertTrue(self._has_changes(locations['child']))
+        self.assertFalse(self._has_changes(locations['parent_sibling']))
+        self.assertFalse(self._has_changes(locations['child_sibling']))
 
         # Publish the unit with changes
         self.draft_store.publish(locations['parent'], self.dummy_user)
 
         # Verify that there are no unpublished changes
         for key in locations:
-            self.assertFalse(self.draft_store.has_changes(locations[key]))
+            self.assertFalse(self._has_changes(locations[key]))
 
     def test_has_changes_publish_ancestors(self):
         """
@@ -663,7 +611,7 @@ class TestMongoModuleStore(unittest.TestCase):
 
         # Verify that there are no unpublished changes
         for key in locations:
-            self.assertFalse(self.draft_store.has_changes(locations[key]))
+            self.assertFalse(self._has_changes(locations[key]))
 
         # Change both children
         child = self.draft_store.get_item(locations['child'])
@@ -674,22 +622,22 @@ class TestMongoModuleStore(unittest.TestCase):
         self.draft_store.update_item(child_sibling, user_id=self.dummy_user)
 
         # Verify that ancestors have changes
-        self.assertTrue(self.draft_store.has_changes(locations['grandparent']))
-        self.assertTrue(self.draft_store.has_changes(locations['parent']))
+        self.assertTrue(self._has_changes(locations['grandparent']))
+        self.assertTrue(self._has_changes(locations['parent']))
 
         # Publish one child
         self.draft_store.publish(locations['child_sibling'], self.dummy_user)
 
         # Verify that ancestors still have changes
-        self.assertTrue(self.draft_store.has_changes(locations['grandparent']))
-        self.assertTrue(self.draft_store.has_changes(locations['parent']))
+        self.assertTrue(self._has_changes(locations['grandparent']))
+        self.assertTrue(self._has_changes(locations['parent']))
 
         # Publish the other child
         self.draft_store.publish(locations['child'], self.dummy_user)
 
         # Verify that ancestors now have no changes
-        self.assertFalse(self.draft_store.has_changes(locations['grandparent']))
-        self.assertFalse(self.draft_store.has_changes(locations['parent']))
+        self.assertFalse(self._has_changes(locations['grandparent']))
+        self.assertFalse(self._has_changes(locations['parent']))
 
     def test_has_changes_add_remove_child(self):
         """
@@ -699,8 +647,8 @@ class TestMongoModuleStore(unittest.TestCase):
         locations = self._create_test_tree('has_changes_add_remove_child')
 
         # Test that the ancestors don't have changes
-        self.assertFalse(self.draft_store.has_changes(locations['grandparent']))
-        self.assertFalse(self.draft_store.has_changes(locations['parent']))
+        self.assertFalse(self._has_changes(locations['grandparent']))
+        self.assertFalse(self._has_changes(locations['parent']))
 
         # Create a new child and attach it to parent
         new_child_location = Location('edX', 'tree', 'has_changes_add_remove_child', 'vertical', 'new_child')
@@ -712,8 +660,8 @@ class TestMongoModuleStore(unittest.TestCase):
         )
 
         # Verify that the ancestors now have changes
-        self.assertTrue(self.draft_store.has_changes(locations['grandparent']))
-        self.assertTrue(self.draft_store.has_changes(locations['parent']))
+        self.assertTrue(self._has_changes(locations['grandparent']))
+        self.assertTrue(self._has_changes(locations['parent']))
 
         # Remove the child from the parent
         parent = self.draft_store.get_item(locations['parent'])
@@ -721,8 +669,8 @@ class TestMongoModuleStore(unittest.TestCase):
         self.draft_store.update_item(parent, user_id=self.dummy_user)
 
         # Verify that ancestors now have no changes
-        self.assertFalse(self.draft_store.has_changes(locations['grandparent']))
-        self.assertFalse(self.draft_store.has_changes(locations['parent']))
+        self.assertFalse(self._has_changes(locations['grandparent']))
+        self.assertFalse(self._has_changes(locations['parent']))
 
     def test_has_changes_non_direct_only_children(self):
         """
@@ -746,16 +694,16 @@ class TestMongoModuleStore(unittest.TestCase):
         self.draft_store.publish(parent_location, self.dummy_user)
 
         # Verify that there are no changes
-        self.assertFalse(self.draft_store.has_changes(parent_location))
-        self.assertFalse(self.draft_store.has_changes(child_location))
+        self.assertFalse(self._has_changes(parent_location))
+        self.assertFalse(self._has_changes(child_location))
 
         # Change the child
         child.display_name = 'Changed Display Name'
         self.draft_store.update_item(child, user_id=self.dummy_user)
 
         # Verify that both parent and child have changes
-        self.assertTrue(self.draft_store.has_changes(parent_location))
-        self.assertTrue(self.draft_store.has_changes(child_location))
+        self.assertTrue(self._has_changes(parent_location))
+        self.assertTrue(self._has_changes(child_location))
 
     def test_update_edit_info_ancestors(self):
         """

@@ -89,11 +89,11 @@ class ModuleStoreEnum(object):
         # user ID to use for tests that do not have a django user available
         test = -3
 
+
 class PublishState(object):
     """
-    The publish state for a given xblock-- either 'draft', 'private', or 'public'.
-
-    Currently in CMS, an xblock can only be in 'draft' or 'private' if it is at or below the Unit level.
+    The legacy publish state for a given xblock-- either 'draft', 'private', or 'public'. These states
+    are no longer used in Studio, but they are still referenced in a few places in LMS.
     """
     draft = 'draft'
     private = 'private'
@@ -396,7 +396,7 @@ class ModuleStoreWrite(ModuleStoreRead):
         pass
 
     @abstractmethod
-    def clone_course(self, source_course_id, dest_course_id, user_id):
+    def clone_course(self, source_course_id, dest_course_id, user_id, fields=None):
         """
         Sets up source_course_id to point a course with the same content as the desct_course_id. This
         operation may be cheap or expensive. It may have to copy all assets and all xblock content or
@@ -568,16 +568,16 @@ class ModuleStoreWriteBase(ModuleStoreReadBase, ModuleStoreWrite):
         :param category: the xblock category
         :param fields: the dictionary of {fieldname: value}
         """
-        if fields is None:
-            return {}
-        cls = self.mixologist.mix(XBlock.load_class(category, select=prefer_xmodules))
         result = collections.defaultdict(dict)
+        if fields is None:
+            return result
+        cls = self.mixologist.mix(XBlock.load_class(category, select=prefer_xmodules))
         for field_name, value in fields.iteritems():
             field = getattr(cls, field_name)
             result[field.scope][field_name] = value
         return result
 
-    def clone_course(self, source_course_id, dest_course_id, user_id):
+    def clone_course(self, source_course_id, dest_course_id, user_id, fields=None):
         """
         This base method just copies the assets. The lower level impls must do the actual cloning of
         content.
@@ -585,7 +585,6 @@ class ModuleStoreWriteBase(ModuleStoreReadBase, ModuleStoreWrite):
         # copy the assets
         if self.contentstore:
             self.contentstore.copy_all_course_assets(source_course_id, dest_course_id)
-            super(ModuleStoreWriteBase, self).clone_course(source_course_id, dest_course_id, user_id)
         return dest_course_id
 
     def delete_course(self, course_key, user_id):

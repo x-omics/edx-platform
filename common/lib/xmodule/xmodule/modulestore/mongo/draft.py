@@ -17,10 +17,10 @@ from xmodule.modulestore.exceptions import (
 )
 from xmodule.modulestore.mongo.base import (
     MongoModuleStore, MongoRevisionKey, as_draft, as_published,
-    DIRECT_ONLY_CATEGORIES, SORT_REVISION_FAVOR_DRAFT
+    SORT_REVISION_FAVOR_DRAFT
 )
 from xmodule.modulestore.store_utilities import rewrite_nonportable_content_links
-from xmodule.modulestore.draft_and_published import UnsupportedRevisionError
+from xmodule.modulestore.draft_and_published import UnsupportedRevisionError, DIRECT_ONLY_CATEGORIES
 
 log = logging.getLogger(__name__)
 
@@ -155,7 +155,7 @@ class DraftModuleStore(MongoModuleStore):
         course_query = self._course_key_to_son(course_key)
         self.collection.remove(course_query, multi=True)
 
-    def clone_course(self, source_course_id, dest_course_id, user_id):
+    def clone_course(self, source_course_id, dest_course_id, user_id, fields=None):
         """
         Only called if cloning within this store or if env doesn't set up mixed.
         * copy the courseware
@@ -177,13 +177,20 @@ class DraftModuleStore(MongoModuleStore):
             )
 
         # clone the assets
-        super(DraftModuleStore, self).clone_course(source_course_id, dest_course_id, user_id)
+        super(DraftModuleStore, self).clone_course(source_course_id, dest_course_id, user_id, fields)
 
         # get the whole old course
         new_course = self.get_course(dest_course_id)
         if new_course is None:
             # create_course creates the about overview
-            new_course = self.create_course(dest_course_id.org, dest_course_id.course, dest_course_id.run, user_id)
+            new_course = self.create_course(
+                dest_course_id.org, dest_course_id.course, dest_course_id.run, user_id, fields=fields
+            )
+        else:
+            # update fields on existing course
+            for key, value in fields.iteritems():
+                setattr(new_course, key, value)
+            self.update_item(new_course, user_id)
 
         # Get all modules under this namespace which is (tag, org, course) tuple
         modules = self.get_items(source_course_id, revision=ModuleStoreEnum.RevisionOption.published_only)
@@ -592,25 +599,19 @@ class DraftModuleStore(MongoModuleStore):
         _internal([root_usage.to_deprecated_son() for root_usage in root_usages])
         self.collection.remove({'_id': {'$in': to_be_deleted}}, safe=self.collection.safe)
 
-    def has_changes(self, location):
+    def has_changes(self, xblock):
         """
         Check if the xblock or its children have been changed since the last publish.
-        :param location: location to check
+        :param xblock: xblock to check
         :return: True if the draft and published versions differ
         """
 
-        try:
-            item = self.get_item(location)
-        # defensively check that the parent's child actually exists
-        except ItemNotFoundError:
-            return False
-
         # don't check children if this block has changes (is not public)
-        if self.compute_publish_state(item) != PublishState.public:
+        if self.compute_publish_state(xblock) != PublishState.public:
             return True
         # if this block doesn't have changes, then check its children
-        elif item.has_children:
-            return any([self.has_changes(child) for child in item.children])
+        elif xblock.has_children:
+            return any([self.has_changes(child) for child in xblock.get_children()])
         # otherwise there are no changes
         else:
             return False
@@ -792,13 +793,11 @@ class DraftModuleStore(MongoModuleStore):
         """
         if getattr(xblock, 'is_draft', False):
             published_xblock_location = as_published(xblock.location)
-            published_item = self.collection.find_one(
-                {'_id': published_xblock_location.to_deprecated_son()}
-            )
-            if published_item is None:
+            try:
+                xblock.runtime.lookup_item(published_xblock_location)
+            except ItemNotFoundError:
                 return PublishState.private
-            else:
-                return PublishState.draft
+            return PublishState.draft
         else:
             return PublishState.public
 

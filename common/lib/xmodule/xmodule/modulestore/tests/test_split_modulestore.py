@@ -1464,19 +1464,11 @@ class TestCourseCreation(SplitModuleTest):
         original_locator = CourseLocator(org='guestx', course='contender', run="run", branch=BRANCH_NAME_DRAFT)
         original = modulestore().get_course(original_locator)
         original_index = modulestore().get_course_index_info(original_locator)
-        fields = {}
-        for field in original.fields.values():
-            value = getattr(original, field.name)
-            if not isinstance(value, datetime.datetime):
-                json_value = field.to_json(value)
-            else:
-                json_value = value
-            if field.scope == Scope.content and field.name != 'location':
-                fields[field.name] = json_value
-            elif field.scope == Scope.settings:
-                fields[field.name] = json_value
+        fields = {
+            'grading_policy': original.grading_policy,
+            'display_name': 'Derivative',
+        }
         fields['grading_policy']['GRADE_CUTOFFS'] = {'A': .9, 'B': .8, 'C': .65}
-        fields['display_name'] = 'Derivative'
         new_draft = modulestore().create_course(
             'counter', 'leech', 'leech_run', 'leech_master', BRANCH_NAME_DRAFT,
             versions_dict={BRANCH_NAME_DRAFT: original_index['versions'][BRANCH_NAME_DRAFT]},
@@ -1687,7 +1679,12 @@ class TestPublish(SplitModuleTest):
             pub_copy = modulestore().get_item(dest_course_loc.make_usage_key("", expected))
             # everything except previous_version & children should be the same
             self.assertEqual(source.category, pub_copy.category)
-            self.assertEqual(source.update_version, pub_copy.update_version)
+            self.assertEqual(
+                source.update_version, pub_copy.source_version,
+                u"Versions don't match for {}: {} != {}".format(
+                    expected, source.update_version, pub_copy.update_version
+                )
+            )
             self.assertEqual(
                 self.user_id, pub_copy.edited_by,
                 "{} edited_by {} not {}".format(pub_copy.location, pub_copy.edited_by, self.user_id)

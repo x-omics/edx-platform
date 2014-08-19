@@ -6,18 +6,21 @@ import json
 import os
 import math
 from unittest import skip, skipUnless
+from nose.plugins.attrib import attr
 
 from xmodule.partitions.partitions import Group, UserPartition
-from bok_choy.promise import Promise
+from bok_choy.promise import Promise, EmptyPromise
 
 from ..fixtures.course import XBlockFixtureDesc
 from ..pages.studio.component_editor import ComponentEditorView
+from ..pages.studio.overview import CourseOutlinePage, CourseOutlineUnit
 from ..pages.studio.settings_advanced import AdvancedSettingsPage
+from ..pages.studio.container import ContainerPage
 from ..pages.studio.settings_group_configurations import GroupConfigurationsPage
 from ..pages.studio.utils import add_advanced_component
 from ..pages.xblock.utils import wait_for_xblock_initialization
 
-from acceptance.tests.base_studio_test import StudioCourseTest
+from .base_studio_test import StudioCourseTest
 
 from test_studio_container import ContainerBase
 
@@ -42,7 +45,7 @@ class SplitTestMixin(object):
         def check_xblock_names(expected_groups, actual_blocks):
             self.assertEqual(len(expected_groups), len(actual_blocks))
             for idx, expected in enumerate(expected_groups):
-                self.assertEqual('Expand or Collapse\n{}'.format(expected), actual_blocks[idx].name)
+                self.assertEqual(expected, actual_blocks[idx].name)
 
         check_xblock_names(active_groups, container.active_xblocks)
         check_xblock_names(inactive_groups, container.inactive_xblocks)
@@ -54,7 +57,7 @@ class SplitTestMixin(object):
 
     def verify_add_missing_groups_button_not_present(self, container):
         """
-        Checks that the "add missing gorups" button/link is not present.
+        Checks that the "add missing groups" button/link is not present.
         """
         def missing_groups_button_not_present():
             button_present = container.missing_groups_button_present()
@@ -63,22 +66,28 @@ class SplitTestMixin(object):
         Promise(missing_groups_button_not_present, "Add missing groups button should not be showing.").fulfill()
 
 
+@attr('shard_1')
 class SplitTest(ContainerBase, SplitTestMixin):
     """
     Tests for creating and editing split test instances in Studio.
     """
     __test__ = True
 
-    def populate_course_fixture(self, course_fixture):
-        """ Populates the course """
-        course_fixture.add_advanced_settings(
-            {
-                u"advanced_modules": {"value": ["split_test"]},
-                u"user_partitions": {"value": [
+    def setUp(self):
+        super(SplitTest, self).setUp()
+        # This line should be called once courseFixture is installed
+        self.course_fixture._update_xblock(self.course_fixture._course_location, {
+            "metadata": {
+                u"user_partitions": [
                     UserPartition(0, 'Configuration alpha,beta', 'first', [Group("0", 'alpha'), Group("1", 'beta')]).to_json(),
                     UserPartition(1, 'Configuration 0,1,2', 'second', [Group("0", 'Group 0'), Group("1", 'Group 1'), Group("2", 'Group 2')]).to_json()
-                ]}
-            }
+                ],
+            },
+        })
+
+    def populate_course_fixture(self, course_fixture):
+        course_fixture.add_advanced_settings(
+            {u"advanced_modules": {"value": ["split_test"]}}
         )
 
         course_fixture.add_children(
@@ -89,37 +98,46 @@ class SplitTest(ContainerBase, SplitTestMixin):
             )
         )
 
+    def verify_add_missing_groups_button_not_present(self, container):
+        """
+        Checks that the "add missing groups" button/link is not present.
+        """
+        def missing_groups_button_not_present():
+            button_present = container.missing_groups_button_present()
+            return (not button_present, not button_present)
+
+        Promise(missing_groups_button_not_present, "Add missing groups button should not be showing.").fulfill()
+
     def create_poorly_configured_split_instance(self):
         """
         Creates a split test instance with a missing group and an inactive group.
 
         Returns the container page.
         """
-        unit = self.go_to_unit_page(make_draft=True)
+        unit = self.go_to_unit_page()
         add_advanced_component(unit, 0, 'split_test')
-        container = self.go_to_container_page()
+        container = self.go_to_nested_container_page()
         container.edit()
         component_editor = ComponentEditorView(self.browser, container.locator)
         component_editor.set_select_value_and_save('Group Configuration', 'Configuration alpha,beta')
-        self.course_fixture.add_advanced_settings(
-            {
-                u"user_partitions": {"value": [
+        self.course_fixture._update_xblock(self.course_fixture._course_location, {
+            "metadata": {
+                u"user_partitions": [
                     UserPartition(0, 'Configuration alpha,beta', 'first',
                                   [Group("0", 'alpha'), Group("2", 'gamma')]).to_json()
-                ]}
-            }
-        )
-        self.course_fixture._add_advanced_settings()
-        return self.go_to_container_page()
+                ],
+            },
+        })
+        return self.go_to_nested_container_page()
 
     def test_create_and_select_group_configuration(self):
         """
         Tests creating a split test instance on the unit page, and then
         assigning the group configuration.
         """
-        unit = self.go_to_unit_page(make_draft=True)
+        unit = self.go_to_unit_page()
         add_advanced_component(unit, 0, 'split_test')
-        container = self.go_to_container_page()
+        container = self.go_to_nested_container_page()
         container.edit()
         component_editor = ComponentEditorView(self.browser, container.locator)
         component_editor.set_select_value_and_save('Group Configuration', 'Configuration alpha,beta')
@@ -127,14 +145,14 @@ class SplitTest(ContainerBase, SplitTestMixin):
 
         # Switch to the other group configuration. Must navigate again to the container page so
         # that there is only a single "editor" on the page.
-        container = self.go_to_container_page()
+        container = self.go_to_nested_container_page()
         container.edit()
         component_editor = ComponentEditorView(self.browser, container.locator)
         component_editor.set_select_value_and_save('Group Configuration', 'Configuration 0,1,2')
         self.verify_groups(container, ['Group 0', 'Group 1', 'Group 2'], ['alpha', 'beta'])
 
         # Reload the page to make sure the groups were persisted.
-        container = self.go_to_container_page()
+        container = self.go_to_nested_container_page()
         self.verify_groups(container, ['Group 0', 'Group 1', 'Group 2'], ['alpha', 'beta'])
 
     @skip("This fails periodically where it fails to trigger the add missing groups action.Dis")
@@ -152,7 +170,7 @@ class SplitTest(ContainerBase, SplitTestMixin):
         self.verify_groups(container, ['alpha', 'gamma'], ['beta'])
 
         # Reload the page to make sure the groups were persisted.
-        container = self.go_to_container_page()
+        container = self.go_to_nested_container_page()
         self.verify_groups(container, ['alpha', 'gamma'], ['beta'])
 
     @skip("Disabling as this fails intermittently. STUD-2003")
@@ -168,6 +186,7 @@ class SplitTest(ContainerBase, SplitTestMixin):
         self.verify_groups(container, ['alpha'], [], verify_missing_groups_not_present=False)
 
 
+@attr('shard_1')
 @skipUnless(os.environ.get('FEATURE_GROUP_CONFIGURATIONS'), 'Tests Group Configurations feature')
 class SettingsMenuTest(StudioCourseTest):
     """
@@ -216,6 +235,7 @@ class SettingsMenuTest(StudioCourseTest):
         self.assertFalse(self.advanced_settings.q(css=link_css).present)
 
 
+@attr('shard_1')
 @skipUnless(os.environ.get('FEATURE_GROUP_CONFIGURATIONS'), 'Tests Group Configurations feature')
 class GroupConfigurationsTest(ContainerBase, SplitTestMixin):
     """
@@ -227,6 +247,13 @@ class GroupConfigurationsTest(ContainerBase, SplitTestMixin):
     def setUp(self):
         super(GroupConfigurationsTest, self).setUp()
         self.page = GroupConfigurationsPage(
+            self.browser,
+            self.course_info['org'],
+            self.course_info['number'],
+            self.course_info['run']
+        )
+
+        self.outline_page = CourseOutlinePage(
             self.browser,
             self.course_info['org'],
             self.course_info['number'],
@@ -267,7 +294,7 @@ class GroupConfigurationsTest(ContainerBase, SplitTestMixin):
             u"advanced_modules": {"value": ["split_test"]},
         })
         course_fixture.add_children(
-            XBlockFixtureDesc('chpater', 'Test Section').add_children(
+            XBlockFixtureDesc('chapter', 'Test Section').add_children(
                 XBlockFixtureDesc('sequential', 'Test Subsection').add_children(
                     XBlockFixtureDesc('vertical', 'Test Unit')
                 )
@@ -302,19 +329,17 @@ class GroupConfigurationsTest(ContainerBase, SplitTestMixin):
         Then I see `description` and `groups` appear and also have correct values
         And I do the same checks for the second group configuration
         """
-        self.course_fixture.add_advanced_settings({
-            u"user_partitions": {
-                "value": [
+        self.course_fixture._update_xblock(self.course_fixture._course_location, {
+            "metadata": {
+                u"user_partitions": [
                     UserPartition(0, 'Name of the Group Configuration', 'Description of the group configuration.', [Group("0", 'Group 0'), Group("1", 'Group 1')]).to_json(),
-                    UserPartition(1, 'Name of second Group Configuration', 'Second group configuration.', [Group("0", 'Alpha'), Group("1", 'Beta'), Group("2", 'Gamma')]).to_json()
+                    UserPartition(1, 'Name of second Group Configuration', 'Second group configuration.', [Group("0", 'Alpha'), Group("1", 'Beta'), Group("2", 'Gamma')]).to_json(),
                 ],
             },
         })
-        self.course_fixture._add_advanced_settings()
 
         self.page.visit()
-
-        config = self.page.group_configurations()[0]
+        config = self.page.group_configurations[0]
         # no groups when the the configuration is collapsed
         self.assertEqual(len(config.groups), 0)
         self._assert_fields(
@@ -324,7 +349,7 @@ class GroupConfigurationsTest(ContainerBase, SplitTestMixin):
             groups=["Group 0", "Group 1"]
         )
 
-        config = self.page.group_configurations()[1]
+        config = self.page.group_configurations[1]
 
         self._assert_fields(
             config,
@@ -347,10 +372,10 @@ class GroupConfigurationsTest(ContainerBase, SplitTestMixin):
         Then I see the group configuration is saved successfully and has the new data
         """
         self.page.visit()
-        self.assertEqual(len(self.page.group_configurations()), 0)
+        self.assertEqual(len(self.page.group_configurations), 0)
         # Create new group configuration
         self.page.create()
-        config = self.page.group_configurations()[0]
+        config = self.page.group_configurations[0]
         config.name = "New Group Configuration Name"
         config.description = "New Description of the group configuration."
         config.groups[1].name = "New Group Name"
@@ -359,6 +384,7 @@ class GroupConfigurationsTest(ContainerBase, SplitTestMixin):
 
         # Save the configuration
         self.assertEqual(config.get_text('.action-primary'), "CREATE")
+        self.assertTrue(config.delete_button_is_absent)
         config.save()
 
         self._assert_fields(
@@ -415,7 +441,7 @@ class GroupConfigurationsTest(ContainerBase, SplitTestMixin):
         self.page.visit()
         # Create new group configuration
         self.page.create()
-        config = self.page.group_configurations()[0]
+        config = self.page.group_configurations[0]
         config.name = "New Group Configuration Name"
         # Add new group
         config.add_group()
@@ -423,16 +449,16 @@ class GroupConfigurationsTest(ContainerBase, SplitTestMixin):
         # Save the configuration
         config.save()
 
-        unit = self.go_to_unit_page(make_draft=True)
+        unit = self.go_to_unit_page()
         add_advanced_component(unit, 0, 'split_test')
-        container = self.go_to_container_page()
+        container = self.go_to_nested_container_page()
         container.edit()
         component_editor = ComponentEditorView(self.browser, container.locator)
         component_editor.set_select_value_and_save('Group Configuration', 'New Group Configuration Name')
         self.verify_groups(container, ['Group A', 'Group B', 'New group'], [])
 
         self.page.visit()
-        config = self.page.group_configurations()[0]
+        config = self.page.group_configurations[0]
         config.edit()
         config.name = "Second Group Configuration Name"
         # Add new group
@@ -442,7 +468,7 @@ class GroupConfigurationsTest(ContainerBase, SplitTestMixin):
         # Save the configuration
         config.save()
 
-        container = self.go_to_container_page()
+        container = self.go_to_nested_container_page()
         container.edit()
         component_editor = ComponentEditorView(self.browser, container.locator)
         self.assertEqual(
@@ -473,11 +499,11 @@ class GroupConfigurationsTest(ContainerBase, SplitTestMixin):
         """
         self.page.visit()
 
-        self.assertEqual(len(self.page.group_configurations()), 0)
+        self.assertEqual(len(self.page.group_configurations), 0)
         # Create new group configuration
         self.page.create()
 
-        config = self.page.group_configurations()[0]
+        config = self.page.group_configurations[0]
         config.name = "Name of the Group Configuration"
         config.description = "Description of the group configuration."
         # Add new group
@@ -485,7 +511,7 @@ class GroupConfigurationsTest(ContainerBase, SplitTestMixin):
         # Cancel the configuration
         config.cancel()
 
-        self.assertEqual(len(self.page.group_configurations()), 0)
+        self.assertEqual(len(self.page.group_configurations), 0)
 
     def test_can_cancel_editing_of_group_configuration(self):
         """
@@ -496,19 +522,16 @@ class GroupConfigurationsTest(ContainerBase, SplitTestMixin):
         And I click button 'Cancel'
         Then I see that new changes were discarded
         """
-        self.course_fixture.add_advanced_settings({
-            u"user_partitions": {
-                "value": [
+        self.course_fixture._update_xblock(self.course_fixture._course_location, {
+            "metadata": {
+                u"user_partitions": [
                     UserPartition(0, 'Name of the Group Configuration', 'Description of the group configuration.', [Group("0", 'Group 0'), Group("1", 'Group 1')]).to_json(),
-                    UserPartition(1, 'Name of second Group Configuration', 'Second group configuration.', [Group("0", 'Alpha'), Group("1", 'Beta'), Group("2", 'Gamma')]).to_json()
+                    UserPartition(1, 'Name of second Group Configuration', 'Second group configuration.', [Group("0", 'Alpha'), Group("1", 'Beta'), Group("2", 'Gamma')]).to_json(),
                 ],
             },
         })
-        self.course_fixture._add_advanced_settings()
         self.page.visit()
-
-        config = self.page.group_configurations()[0]
-
+        config = self.page.group_configurations[0]
         config.name = "New Group Configuration Name"
         config.description = "New Description of the group configuration."
         # Add 2 new groups
@@ -551,7 +574,7 @@ class GroupConfigurationsTest(ContainerBase, SplitTestMixin):
         # Create new group configuration
         self.page.create()
         # Leave empty required field
-        config = self.page.group_configurations()[0]
+        config = self.page.group_configurations[0]
         config.description = "Description of the group configuration."
 
         try_to_save_and_verify_error_message("Group Configuration name is required")
@@ -572,4 +595,192 @@ class GroupConfigurationsTest(ContainerBase, SplitTestMixin):
             name="Name of the Group Configuration",
             description="Description of the group configuration.",
             groups=["Group A", "Group B"]
+        )
+
+    def test_group_configuration_empty_usage(self):
+        """
+        Scenario: When group configuration is not used, ensure that the link to outline page works correctly.
+        Given I have a course without group configurations
+        And I create new group configuration with 2 default groups
+        Then I see a link to the outline page
+        When I click on the outline link
+        Then I see the outline page
+        """
+        # Create a new group configurations
+        self.course_fixture._update_xblock(self.course_fixture._course_location, {
+            "metadata": {
+                u"user_partitions": [
+                    UserPartition(0, "Name", "Description.", [Group("0", "Group A"), Group("1", "Group B")]).to_json(),
+                ],
+            },
+        })
+
+        # Go to the Group Configuration Page and click on outline anchor
+        self.page.visit()
+        config = self.page.group_configurations[0]
+        config.toggle()
+        config.click_outline_anchor()
+
+        # Waiting for the page load and verify that we've landed on course outline page
+        EmptyPromise(
+            lambda: self.outline_page.is_browser_on_page(), "loaded page {!r}".format(self.outline_page),
+            timeout=30
+        ).fulfill()
+
+    def test_group_configuration_non_empty_usage(self):
+        """
+        Scenario: When group configuration is used, ensure that the links to units using a group configuration work correctly.
+        Given I have a course without group configurations
+        And I create new group configuration with 2 default groups
+        And I create a unit and assign the newly created group configuration
+        And open the Group Configuration page
+        Then I see a link to the newly created unit
+        When I click on the unit link
+        Then I see correct unit page
+        """
+        # Create a new group configurations
+        self.course_fixture._update_xblock(self.course_fixture._course_location, {
+            "metadata": {
+                u"user_partitions": [
+                    UserPartition(0, "Name", "Description.", [Group("0", "Group A"), Group("1", "Group B")]).to_json(),
+                ],
+            },
+        })
+
+        # Assign newly created group configuration to unit
+        vertical = self.course_fixture.get_nested_xblocks(category="vertical")[0]
+        self.course_fixture.create_xblock(
+            vertical.locator,
+            XBlockFixtureDesc('split_test', 'Test Content Experiment', metadata={'user_partition_id': 0})
+        )
+        unit = CourseOutlineUnit(self.browser, vertical.locator)
+
+        # Go to the Group Configuration Page and click unit anchor
+        self.page.visit()
+        config = self.page.group_configurations[0]
+        config.toggle()
+        usage = config.usages[0]
+        config.click_unit_anchor()
+
+        unit = ContainerPage(self.browser, vertical.locator)
+        # Waiting for the page load and verify that we've landed on the unit page
+        EmptyPromise(
+            lambda: unit.is_browser_on_page(), "loaded page {!r}".format(unit),
+            timeout=30
+        ).fulfill()
+
+        self.assertIn(unit.name, usage)
+
+    def test_can_delete_unused_group_configuration(self):
+        """
+        Scenario: Ensure that the user can delete unused group configuration.
+        Given I have a course with 2 group configurations
+        And I go to the Group Configuration page
+        When I delete the Group Configuration with name "Configuration 1"
+        Then I see that there is one Group Configuration
+        When I edit the Group Configuration with name "Configuration 2"
+        And I delete the Group Configuration with name "Configuration 2"
+        Then I see that the are no Group Configurations
+        """
+        self.course_fixture._update_xblock(self.course_fixture._course_location, {
+            "metadata": {
+                u"user_partitions": [
+                    UserPartition(0, 'Configuration 1', 'Description of the group configuration.', [Group("0", 'Group 0'), Group("1", 'Group 1')]).to_json(),
+                    UserPartition(1, 'Configuration 2', 'Second group configuration.', [Group("0", 'Alpha'), Group("1", 'Beta'), Group("2", 'Gamma')]).to_json()
+                ],
+            },
+        })
+        self.page.visit()
+
+        self.assertEqual(len(self.page.group_configurations), 2)
+        config = self.page.group_configurations[1]
+        # Delete first group configuration via detail view
+        config.delete()
+        self.assertEqual(len(self.page.group_configurations), 1)
+
+        config = self.page.group_configurations[0]
+        config.edit()
+        self.assertFalse(config.delete_button_is_disabled)
+        # Delete first group configuration via edit view
+        config.delete()
+        self.assertEqual(len(self.page.group_configurations), 0)
+
+    def test_cannot_delete_used_group_configuration(self):
+        """
+        Scenario: Ensure that the user cannot delete unused group configuration.
+        Given I have a course with group configuration that is used in the Content Experiment
+        When I go to the Group Configuration page
+        Then I do not see delete button and I see a note about that
+        When I edit the Group Configuration
+        Then I do not see delete button and I see the note about that
+        """
+        # Create a new group configurations
+        self.course_fixture._update_xblock(self.course_fixture._course_location, {
+            "metadata": {
+                u"user_partitions": [
+                    UserPartition(0, "Name", "Description.", [Group("0", "Group A"), Group("1", "Group B")]).to_json()
+                ],
+            },
+        })
+        vertical = self.course_fixture.get_nested_xblocks(category="vertical")[0]
+        self.course_fixture.create_xblock(
+            vertical.locator,
+            XBlockFixtureDesc('split_test', 'Test Content Experiment', metadata={'user_partition_id': 0})
+        )
+        # Go to the Group Configuration Page and click unit anchor
+        self.page.visit()
+
+        config = self.page.group_configurations[0]
+        self.assertTrue(config.delete_button_is_disabled)
+        self.assertIn('Cannot delete when in use by an experiment', config.delete_note)
+
+        config.edit()
+        self.assertTrue(config.delete_button_is_disabled)
+        self.assertIn('Cannot delete when in use by an experiment', config.delete_note)
+
+    def test_easy_access_from_experiment(self):
+        """
+        Scenario: When a Content Experiment uses a Group Configuration,
+        ensure that the link to that Group Configuration works correctly.
+
+        Given I have a course with two Group Configurations
+        And Content Experiment is assigned to one Group Configuration
+        Then I see a link to Group Configuration
+        When I click on the Group Configuration link
+        Then I see the Group Configurations page
+        And I see that appropriate Group Configuration is expanded.
+        """
+        # Create a new group configurations
+        self.course_fixture._update_xblock(self.course_fixture._course_location, {
+            "metadata": {
+                u"user_partitions": [
+                    UserPartition(0, "Name", "Description.", [Group("0", "Group A"), Group("1", "Group B")]).to_json(),
+                    UserPartition(1, 'Name of second Group Configuration', 'Second group configuration.', [Group("0", 'Alpha'), Group("1", 'Beta'), Group("2", 'Gamma')]).to_json(),
+                ],
+            },
+        })
+
+        # Assign newly created group configuration to unit
+        vertical = self.course_fixture.get_nested_xblocks(category="vertical")[0]
+        self.course_fixture.create_xblock(
+            vertical.locator,
+            XBlockFixtureDesc('split_test', 'Test Content Experiment', metadata={'user_partition_id': 1})
+        )
+
+        unit = ContainerPage(self.browser, vertical.locator)
+        unit.visit()
+        experiment = unit.xblocks[0]
+
+        group_configuration_link_name = experiment.group_configuration_link_name
+
+        experiment.go_to_group_configuration_page()
+        self.page.wait_for_page()
+
+        # Appropriate Group Configuration is expanded.
+        self.assertFalse(self.page.group_configurations[0].is_expanded)
+        self.assertTrue(self.page.group_configurations[1].is_expanded)
+
+        self.assertEqual(
+            group_configuration_link_name,
+            self.page.group_configurations[1].name
         )
