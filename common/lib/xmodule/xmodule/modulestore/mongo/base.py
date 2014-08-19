@@ -35,7 +35,7 @@ from xblock.exceptions import InvalidScopeError
 from xblock.fields import Scope, ScopeIds, Reference, ReferenceList, ReferenceValueDict
 
 from xmodule.modulestore import ModuleStoreWriteBase, ModuleStoreEnum
-from xmodule.modulestore.draft_and_published import ModuleStoreDraftAndPublished
+from xmodule.modulestore.draft_and_published import ModuleStoreDraftAndPublished, DIRECT_ONLY_CATEGORIES
 from opaque_keys.edx.locations import Location
 from xmodule.modulestore.exceptions import ItemNotFoundError, InvalidLocationError, ReferentialIntegrityError
 from xmodule.modulestore.inheritance import own_metadata, InheritanceMixin, inherit_metadata, InheritanceKeyValueStore
@@ -45,10 +45,6 @@ from opaque_keys.edx.keys import UsageKey, CourseKey
 from xmodule.exceptions import HeartbeatFailure
 
 log = logging.getLogger(__name__)
-
-
-# Things w/ these categories should never be marked as version=DRAFT
-DIRECT_ONLY_CATEGORIES = ['course', 'chapter', 'sequential', 'about', 'static_tab', 'course_info']
 
 # sort order that returns DRAFT items first
 SORT_REVISION_FAVOR_DRAFT = ('_id.revision', pymongo.DESCENDING)
@@ -300,6 +296,19 @@ class CachingDescriptorSystem(MakoDescriptorSystem):
                         assert isinstance(subvalue, basestring)
                         value[key] = self._convert_reference_to_key(subvalue)
         return jsonfields
+
+    def lookup_item(self, location):
+        """
+        Returns the JSON payload of the xblock at location.
+        """
+
+        try:
+            json = self.module_data[location]
+        except KeyError:
+            json = self.modulestore._find_one(location)
+            self.module_data[location] = json
+
+        return json
 
 
 # The only thing using this w/ wildcards is contentstore.mongo for asset retrieval

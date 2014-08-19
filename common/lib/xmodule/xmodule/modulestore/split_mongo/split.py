@@ -37,6 +37,7 @@ Representation:
                 ***** 'previous_version': the guid for the structure which previously changed this xblock
                 (will be the previous value of update_version; so, may point to a structure not in this
                 structure's history.)
+                ***** 'source_version': the guid for the structure was copied/published into this block
 * definition: shared content with revision history for xblock content fields
     ** '_id': definition_id (guid),
     ** 'category': xblock type id
@@ -76,12 +77,12 @@ from .caching_descriptor_system import CachingDescriptorSystem
 from xmodule.modulestore.split_mongo.mongo_connection import MongoConnection
 from xmodule.error_module import ErrorDescriptor
 from xmodule.modulestore.split_mongo import encode_key_for_mongo, decode_key_from_mongo
+import types
+from _collections import defaultdict
 
 
 log = logging.getLogger(__name__)
 #==============================================================================
-# Documentation is at
-# https://edx-wiki.atlassian.net/wiki/display/ENG/Mongostore+Data+Structure
 #
 # Known issue:
 #    Inheritance for cached kvs doesn't work on edits. Use case.
@@ -98,6 +99,9 @@ log = logging.getLogger(__name__)
 #   Local fix wont' permanently work b/c xblock may cache a.foo...
 #
 #==============================================================================
+
+# When blacklists are this, all children should be excluded
+EXCLUDE_ALL = '*'
 
 
 class SplitMongoModuleStore(ModuleStoreWriteBase):
@@ -936,17 +940,17 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
         # don't need to update the index b/c create_item did it for this version
         return xblock
 
-    def clone_course(self, source_course_id, dest_course_id, user_id):
+    def clone_course(self, source_course_id, dest_course_id, user_id, fields=None):
         """
         See :meth: `.ModuleStoreWrite.clone_course` for documentation.
 
         In split, other than copying the assets, this is cheap as it merely creates a new version of the
         existing course.
         """
-        super(SplitMongoModuleStore, self).clone_course(source_course_id, dest_course_id, user_id)
+        super(SplitMongoModuleStore, self).clone_course(source_course_id, dest_course_id, user_id, fields)
         source_index = self.get_course_index_info(source_course_id)
         return self.create_course(
-            dest_course_id.org, dest_course_id.course, dest_course_id.run, user_id, fields=None,  # override start_date?
+            dest_course_id.org, dest_course_id.course, dest_course_id.run, user_id, fields=fields,
             versions_dict=source_index['versions'], search_targets=source_index['search_targets']
         )
 
@@ -1004,7 +1008,7 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
             raise DuplicateCourseError(locator, index)
 
         partitioned_fields = self.partition_fields_by_scope(root_category, fields)
-        block_fields = partitioned_fields.setdefault(Scope.settings, {})
+        block_fields = partitioned_fields[Scope.settings]
         if Scope.children in partitioned_fields:
             block_fields.update(partitioned_fields[Scope.children])
         definition_fields = self._serialize_fields(root_category, partitioned_fields.get(Scope.content, {}))
@@ -1040,34 +1044,33 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
             else:
                 versions_dict[master_branch] = new_id
 
-        else:
+        elif definition_fields or block_fields:  # pointing to existing course w/ some overrides
             # just get the draft_version structure
             draft_version = CourseLocator(version_guid=versions_dict[master_branch])
             draft_structure = self._lookup_course(draft_version)['structure']
-            if definition_fields or block_fields:
-                draft_structure = self._version_structure(draft_structure, user_id)
-                new_id = draft_structure['_id']
-                encoded_block_id = encode_key_for_mongo(draft_structure['root'])
-                root_block = draft_structure['blocks'][encoded_block_id]
-                if block_fields is not None:
-                    root_block['fields'].update(self._serialize_fields(root_category, block_fields))
-                if definition_fields is not None:
-                    definition = self.db_connection.get_definition(root_block['definition'])
-                    definition['fields'].update(definition_fields)
-                    definition['edit_info']['previous_version'] = definition['_id']
-                    definition['edit_info']['edited_by'] = user_id
-                    definition['edit_info']['edited_on'] = datetime.datetime.now(UTC)
-                    definition['_id'] = ObjectId()
-                    definition['schema_version'] = self.SCHEMA_VERSION
-                    self.db_connection.insert_definition(definition)
-                    root_block['definition'] = definition['_id']
-                    root_block['edit_info']['edited_on'] = datetime.datetime.now(UTC)
-                    root_block['edit_info']['edited_by'] = user_id
-                    root_block['edit_info']['previous_version'] = root_block['edit_info'].get('update_version')
-                    root_block['edit_info']['update_version'] = new_id
+            draft_structure = self._version_structure(draft_structure, user_id)
+            new_id = draft_structure['_id']
+            encoded_block_id = encode_key_for_mongo(draft_structure['root'])
+            root_block = draft_structure['blocks'][encoded_block_id]
+            if block_fields is not None:
+                root_block['fields'].update(self._serialize_fields(root_category, block_fields))
+            if definition_fields is not None:
+                definition = self.db_connection.get_definition(root_block['definition'])
+                definition['fields'].update(definition_fields)
+                definition['edit_info']['previous_version'] = definition['_id']
+                definition['edit_info']['edited_by'] = user_id
+                definition['edit_info']['edited_on'] = datetime.datetime.now(UTC)
+                definition['_id'] = ObjectId()
+                definition['schema_version'] = self.SCHEMA_VERSION
+                self.db_connection.insert_definition(definition)
+                root_block['definition'] = definition['_id']
+                root_block['edit_info']['edited_on'] = datetime.datetime.now(UTC)
+                root_block['edit_info']['edited_by'] = user_id
+                root_block['edit_info']['previous_version'] = root_block['edit_info'].get('update_version')
+                root_block['edit_info']['update_version'] = new_id
 
-                self.db_connection.insert_structure(draft_structure)
-                versions_dict[master_branch] = new_id
+            self.db_connection.insert_structure(draft_structure)
+            versions_dict[master_branch] = new_id
 
         index_entry = {
             '_id': ObjectId(),
@@ -1105,14 +1108,15 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
         original_structure = self._lookup_course(descriptor.location)['structure']
         index_entry = self._get_index_if_valid(descriptor.location, force)
 
-        definition_fields = descriptor.get_explicitly_set_fields_by_scope(Scope.content)
+        partitioned_fields = self.partition_xblock_fields_by_scope(descriptor)
+        definition_fields = partitioned_fields[Scope.content]
         descriptor.definition_locator, is_updated = self.update_definition_from_data(
             descriptor.definition_locator, definition_fields, user_id
         )
 
         original_entry = self._get_block_from_structure(original_structure, descriptor.location.block_id)
         # check metadata
-        settings = descriptor.get_explicitly_set_fields_by_scope(Scope.settings)
+        settings = partitioned_fields[Scope.settings]
         settings = self._serialize_fields(descriptor.category, settings)
         if not is_updated:
             is_updated = self._compare_settings(settings, original_entry['fields'])
@@ -1234,7 +1238,8 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
 
     def _persist_subdag(self, xblock, user_id, structure_blocks, new_id):
         # persist the definition if persisted != passed
-        new_def_data = self._serialize_fields(xblock.category, xblock.get_explicitly_set_fields_by_scope(Scope.content))
+        partitioned_fields = self.partition_xblock_fields_by_scope(xblock)
+        new_def_data = self._serialize_fields(xblock.category, partitioned_fields[Scope.content])
         is_updated = False
         if xblock.definition_locator is None or isinstance(xblock.definition_locator.definition_id, LocalId):
             xblock.definition_locator = self.create_definition_from_data(
@@ -1269,7 +1274,7 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
                     children.append(child.block_id)
             is_updated = is_updated or structure_blocks[encoded_block_id]['fields']['children'] != children
 
-        block_fields = xblock.get_explicitly_set_fields_by_scope(Scope.settings)
+        block_fields = partitioned_fields[Scope.settings]
         block_fields = self._serialize_fields(xblock.category, block_fields)
         if not is_new and not is_updated:
             is_updated = self._compare_settings(block_fields, structure_blocks[encoded_block_id]['fields'])
@@ -1358,7 +1363,8 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
             destination_structure = self._lookup_course(destination_course)['structure']
             destination_structure = self._version_structure(destination_structure, user_id)
 
-        blacklist = [shunned.block_id for shunned in blacklist or []]
+        if blacklist != EXCLUDE_ALL:
+            blacklist = [shunned.block_id for shunned in blacklist or []]
         # iterate over subtree list filtering out blacklist.
         orphans = set()
         destination_blocks = destination_structure['blocks']
@@ -1379,7 +1385,8 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
             # update/create the subtree and its children in destination (skipping blacklist)
             orphans.update(
                 self._publish_subdag(
-                    user_id, subtree_root.block_id, source_structure['blocks'], destination_blocks, blacklist
+                    user_id, destination_structure['_id'],
+                    subtree_root.block_id, source_structure['blocks'], destination_blocks, blacklist
                 )
             )
         # remove any remaining orphans
@@ -1694,6 +1701,18 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
         index_entry['versions'][branch] = new_id
         self.db_connection.update_course_index(index_entry)
 
+    def partition_xblock_fields_by_scope(self, xblock):
+        """
+        Return a dictionary of scopes mapped to this xblock's explicitly set fields w/o any conversions
+        """
+        # explicitly_set_fields_by_scope converts to json; so, avoiding it
+        # the existing partition_fields_by_scope works on a dict not an xblock
+        result = defaultdict(dict)
+        for field in xblock.fields.itervalues():
+            if field.is_set_on(xblock):
+                result[field.scope][field.name] = field.read_from(xblock)
+        return result
+
     def _serialize_fields(self, category, fields):
         """
         Convert any references to their serialized form.
@@ -1705,6 +1724,7 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
         assert isinstance(fields, dict)
         xblock_class = XBlock.load_class(category, self.default_class)
         xblock_class = self.mixologist.mix(xblock_class)
+
         for field_name, value in fields.iteritems():
             if value:
                 if isinstance(xblock_class.fields[field_name], Reference):
@@ -1716,6 +1736,9 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
                 elif isinstance(xblock_class.fields[field_name], ReferenceValueDict):
                     for key, subvalue in value.iteritems():
                         value[key] = subvalue.block_id
+                # should this recurse down dicts and lists just in case they contain datetime?
+                elif not isinstance(value, datetime.datetime):  # don't convert datetimes!
+                    fields[field_name] = xblock_class.fields[field_name].to_json(value)
 
         # I think these are obsolete conditions; so, I want to confirm that. Thus the warnings
         if 'location' in fields:
@@ -1785,7 +1808,7 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
         destination_parent['fields']['children'] = destination_reordered
         return orphans
 
-    def _publish_subdag(self, user_id, block_id, source_blocks, destination_blocks, blacklist):
+    def _publish_subdag(self, user_id, destination_version, block_id, source_blocks, destination_blocks, blacklist):
         """
         Update destination_blocks for the sub-dag rooted at block_id to be like the one in
         source_blocks excluding blacklist.
@@ -1797,29 +1820,50 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
         destination_block = destination_blocks.get(encoded_block_id)
         new_block = source_blocks[encoded_block_id]
         if destination_block:
-            if destination_block['edit_info']['update_version'] != new_block['edit_info']['update_version']:
-                source_children = new_block['fields'].get('children', [])
-                for child in destination_block['fields'].get('children', []):
-                    try:
-                        source_children.index(child)
-                    except ValueError:
-                        orphans.add(child)
-                previous_version = new_block['edit_info']['update_version']
-                destination_block = copy.deepcopy(new_block)
-                destination_block['fields'] = self._filter_blacklist(destination_block['fields'], blacklist)
-                destination_block['edit_info']['previous_version'] = previous_version
-                destination_block['edit_info']['edited_by'] = user_id
+            # reorder children to correspond to whatever order holds for source.
+            # remove any which source no longer claims (put into orphans)
+            # add any which are being published
+            source_children = new_block['fields'].get('children', [])
+            existing_children = destination_block['fields'].get('children', [])
+            destination_reordered = SparseList()
+            for child in existing_children:
+                try:
+                    index = source_children.index(child)
+                    destination_reordered[index] = child
+                except ValueError:
+                    orphans.add(child)
+            if blacklist != EXCLUDE_ALL:
+                for index, child in enumerate(source_children):
+                    if child not in blacklist:
+                        destination_reordered[index] = child
+            # the history of the published leaps between publications and only points to
+            # previously published versions.
+            previous_version = destination_block['edit_info']['update_version']
+            destination_block = copy.deepcopy(new_block)
+            destination_block['fields']['children'] = destination_reordered.compact_list()
+            destination_block['edit_info']['previous_version'] = previous_version
+            destination_block['edit_info']['update_version'] = destination_version
+            destination_block['edit_info']['edited_by'] = user_id
         else:
             destination_block = self._new_block(
                 user_id, new_block['category'],
                 self._filter_blacklist(copy.copy(new_block['fields']), blacklist),
                 new_block['definition'],
-                new_block['edit_info']['update_version'],
+                destination_version,
                 raw=True
             )
-        for child in destination_block['fields'].get('children', []):
-            if child not in blacklist:
-                orphans.update(self._publish_subdag(user_id, child, source_blocks, destination_blocks, blacklist))
+
+        # introduce new edit info field for tracing where copied/published blocks came
+        destination_block['edit_info']['source_version'] = new_block['edit_info']['update_version']
+
+        if blacklist != EXCLUDE_ALL:
+            for child in destination_block['fields'].get('children', []):
+                if child not in blacklist:
+                    orphans.update(
+                        self._publish_subdag(
+                            user_id, destination_version, child, source_blocks, destination_blocks, blacklist
+                        )
+                    )
         destination_blocks[encoded_block_id] = destination_block
         return orphans
 
@@ -1828,7 +1872,10 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
         Filter out blacklist from the children field in fields. Will construct a new list for children;
         so, no need to worry about copying the children field, but it will modify fiels.
         """
-        fields['children'] = [child for child in fields.get('children', []) if child not in blacklist]
+        if blacklist == EXCLUDE_ALL:
+            fields['children'] = []
+        else:
+            fields['children'] = [child for child in fields.get('children', []) if child not in blacklist]
         return fields
 
     def _delete_if_true_orphan(self, orphan, structure):
@@ -1905,3 +1952,24 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
         Check that the db is reachable.
         """
         return {ModuleStoreEnum.Type.split: self.db_connection.heartbeat()}
+
+
+class SparseList(list):
+    """
+    Enable inserting items into a list in arbitrary order and then retrieving them.
+    """
+    # taken from http://stackoverflow.com/questions/1857780/sparse-assignment-list-in-python
+    def __setitem__(self, index, value):
+        """
+        Add value to the list ensuring the list is long enough to accommodate it at the given index
+        """
+        missing = index - len(self) + 1
+        if missing > 0:
+            self.extend([None] * missing)
+        list.__setitem__(self, index, value)
+
+    def compact_list(self):
+        """
+        Return as a regular lists w/ all Nones removed
+        """
+        return [ele for ele in self if ele is not None]

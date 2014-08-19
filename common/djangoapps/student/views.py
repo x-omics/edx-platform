@@ -285,6 +285,11 @@ def _cert_info(user, course, cert_status):
     if cert_status is None:
         return default_info
 
+    is_hidden_status = cert_status['status'] in ('unavailable', 'processing', 'generating', 'notpassing')
+
+    if course.certificates_display_behavior == 'early_no_info' and is_hidden_status:
+        return None
+
     status = template_state.get(cert_status['status'], default_status)
 
     d = {'status': status,
@@ -483,6 +488,8 @@ def dashboard(request):
     show_refund_option_for = frozenset(course.id for course, _enrollment in course_enrollment_pairs
                                        if _enrollment.refundable())
 
+    enrolled_courses_either_paid = frozenset(course.id for course, _enrollment in course_enrollment_pairs
+                                             if _enrollment.is_paid_course())
     # get info w.r.t ExternalAuthMap
     external_auth_map = None
     try:
@@ -535,6 +542,7 @@ def dashboard(request):
         'duplicate_provider': None,
         'logout_url': reverse(logout_user),
         'platform_name': settings.PLATFORM_NAME,
+        'enrolled_courses_either_paid': enrolled_courses_either_paid,
         'provider_states': [],
     }
 
@@ -632,10 +640,16 @@ def change_enrollment(request):
         available_modes = CourseMode.modes_for_course(course_id)
         if len(available_modes) > 1:
             return HttpResponse(
-                reverse("course_modes_choose", kwargs={'course_id': course_id.to_deprecated_string()})
+                reverse("course_modes_choose", kwargs={'course_id': unicode(course_id)})
             )
 
         current_mode = available_modes[0]
+        # only automatically enroll people if the only mode is 'honor'
+        if current_mode.slug != 'honor':
+            return HttpResponse(
+                reverse("course_modes_choose", kwargs={'course_id': unicode(course_id)})
+            )
+
         CourseEnrollment.enroll(user, course.id, mode=current_mode.slug)
 
         return HttpResponse()
@@ -1251,7 +1265,8 @@ def create_account(request, post_override=None):  # pylint: disable-msg=too-many
         return JsonResponse(js, status=400)
 
     # enforce password complexity as an optional feature
-    if settings.FEATURES.get('ENFORCE_PASSWORD_POLICY', False):
+    # but not if we're doing ext auth b/c those pws never get used and are auto-generated so might not pass validation
+    if settings.FEATURES.get('ENFORCE_PASSWORD_POLICY', False) and not DoExternalAuth:
         try:
             password = post_vars['password']
 

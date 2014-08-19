@@ -7,6 +7,8 @@ from abc import ABCMeta, abstractmethod
 from contextlib import contextmanager
 from . import ModuleStoreEnum
 
+# Things w/ these categories should never be marked as version=DRAFT
+DIRECT_ONLY_CATEGORIES = ['course', 'chapter', 'sequential', 'about', 'static_tab', 'course_info']
 
 class BranchSettingMixin(object):
     """
@@ -78,7 +80,7 @@ class ModuleStoreDraftAndPublished(BranchSettingMixin):
         raise NotImplementedError
 
     @abstractmethod
-    def has_changes(self, usage_key):
+    def has_changes(self, xblock):
         raise NotImplementedError
 
     @abstractmethod
