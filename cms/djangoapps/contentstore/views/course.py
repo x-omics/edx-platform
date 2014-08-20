@@ -24,9 +24,9 @@ from xmodule.contentstore.content import StaticContent
 from xmodule.tabs import PDFTextbookTabs
 from xmodule.partitions.partitions import UserPartition, Group
 
-from xmodule.modulestore.exceptions import ItemNotFoundError, InvalidLocationError
+from xmodule.modulestore.exceptions import ItemNotFoundError, DuplicateCourseError
 from opaque_keys import InvalidKeyError
-from opaque_keys.edx.locations import Location, SlashSeparatedCourseKey
+from opaque_keys.edx.locations import Location
 
 from contentstore.course_info_model import get_course_updates, update_course_updates, delete_course_update
 from contentstore.utils import (
@@ -106,7 +106,7 @@ def course_notifications_handler(request, course_key_string=None, action_state_i
     Handle incoming requests for notifications in a RESTful way.
 
     course_key_string and action_state_id must both be set; else a HttpBadResponseRequest is returned.
-    
+
     For each of these operations, the requesting user must have access to the course;
     else a PermissionDenied error is returned.
 
@@ -441,7 +441,7 @@ def _create_or_rerun_course(request):
     """
     To be called by requests that create a new destination course (i.e., create_new_course and rerun_course)
     Returns the destination course_key and overriding fields for the new course.
-    Raises InvalidLocationError and InvalidKeyError
+    Raises DuplicateCourseError and InvalidKeyError
     """
     if not auth.has_access(request.user, CourseCreatorRole()):
         raise PermissionDenied()
@@ -465,11 +465,11 @@ def _create_or_rerun_course(request):
         fields = {'display_name': display_name, 'course_category': course_category} if display_name and course_category is not None else {}
 
         if 'source_course_key' in request.json:
-            return _rerun_course(request, course_key, fields)
+            return _rerun_course(request, org, number, run, fields)
         else:
-            return _create_new_course(request, course_key, fields)
+            return _create_new_course(request, org, number, run, fields)
 
-    except InvalidLocationError:
+    except DuplicateCourseError:
         return JsonResponse({
             'ErrMsg': _(
                 'There is already a course defined with the same '
@@ -489,27 +489,30 @@ def _create_or_rerun_course(request):
         )
 
 
-def _create_new_course(request, course_key, fields):
+def _create_new_course(request, org, number, run, fields):
     """
     Create a new course.
     Returns the URL for the course overview page.
+    Raises DuplicateCourseError if the course already exists
     """
     # Set a unique wiki_slug for newly created courses. To maintain active wiki_slugs for
     # existing xml courses this cannot be changed in CourseDescriptor.
     # # TODO get rid of defining wiki slug in this org/course/run specific way and reconcile
     # w/ xmodule.course_module.CourseDescriptor.__init__
-    wiki_slug = u"{0}.{1}.{2}".format(course_key.org, course_key.course, course_key.run)
+    wiki_slug = u"{0}.{1}.{2}".format(org, number, run)
     definition_data = {'wiki_slug': wiki_slug}
     fields.update(definition_data)
 
-    # Creating the course raises InvalidLocationError if an existing course with this org/name is found
-    new_course = modulestore().create_course(
-        course_key.org,
-        course_key.course,
-        course_key.run,
-        request.user.id,
-        fields=fields,
-    )
+    store = modulestore()
+    with store.default_store(settings.FEATURES.get('DEFAULT_STORE_FOR_NEW_COURSE', 'mongo')):
+        # Creating the course raises DuplicateCourseError if an existing course with this org/name is found
+        new_course = store.create_course(
+            org,
+            number,
+            run,
+            request.user.id,
+            fields=fields,
+        )
 
     # Make sure user has instructor and staff access to the new course
     add_instructor(new_course.id, request.user, request.user)
@@ -522,7 +525,7 @@ def _create_new_course(request, course_key, fields):
     })
 
 
-def _rerun_course(request, destination_course_key, fields):
+def _rerun_course(request, org, number, run, fields):
     """
     Reruns an existing course.
     Returns the URL for the course listing page.
@@ -533,6 +536,15 @@ def _rerun_course(request, destination_course_key, fields):
     if not has_course_access(request.user, source_course_key):
         raise PermissionDenied()
 
+    # create destination course key
+    store = modulestore()
+    with store.default_store('split'):
+        destination_course_key = store.make_course_key(org, number, run)
+
+     # verify org course and run don't already exist
+    if store.has_course(destination_course_key, ignore_case=True):
+        raise DuplicateCourseError(source_course_key, destination_course_key)
+
     # Make sure user has instructor and staff access to the destination course
     # so the user can see the updated status for that course
     add_instructor(destination_course_key, request.user, request.user)
@@ -541,10 +553,13 @@ def _rerun_course(request, destination_course_key, fields):
     CourseRerunState.objects.initiated(source_course_key, destination_course_key, request.user)
 
     # Rerun the course as a new celery task
-    rerun_course.delay(source_course_key, destination_course_key, request.user.id, fields)
+    rerun_course.delay(unicode(source_course_key), unicode(destination_course_key), request.user.id, fields)
 
     # Return course listing page
-    return JsonResponse({'url': reverse_url('course_handler')})
+    return JsonResponse({
+        'url': reverse_url('course_handler'),
+        'destination_course_key': unicode(destination_course_key)
+    })
 
 
 # pylint: disable=unused-argument
@@ -1110,20 +1125,49 @@ class GroupConfiguration(object):
     @staticmethod
     def get_usage_info(course, store):
         """
-        Get all units names and their urls that have experiments and associated
-        with configurations.
+        Get usage information for all Group Configurations.
+        """
+        split_tests = store.get_items(course.id, qualifiers={'category': 'split_test'})
+        return GroupConfiguration._get_usage_info(store, course, split_tests)
+
+    @staticmethod
+    def add_usage_info(course, store):
+        """
+        Add usage information to group configurations jsons in course.
+
+        Returns json of group configurations updated with usage information.
+        """
+        usage_info = GroupConfiguration.get_usage_info(course, store)
+        configurations = []
+        for partition in course.user_partitions:
+            configuration = partition.to_json()
+            configuration['usage'] = usage_info.get(partition.id, [])
+            configurations.append(configuration)
+        return configurations
+
+    @staticmethod
+    def _get_usage_info(store, course, split_tests):
+        """
+        Returns all units names, their urls and validation messages.
 
         Returns:
         {'user_partition_id':
             [
-                {'label': 'Unit Name / Experiment Name', 'url': 'url_to_unit_1'},
-                {'label': 'Another Unit Name / Another Experiment Name', 'url': 'url_to_unit_1'}
+                {
+                    'label': 'Unit 1 / Experiment 1',
+                    'url': 'url_to_unit_1',
+                    'validation': {'message': 'a validation message', 'type': 'warning'}
+                },
+                {
+                    'label': 'Unit 2 / Experiment 2',
+                    'url': 'url_to_unit_2',
+                    'validation': {'message': 'another validation message', 'type': 'error'}
+                }
             ],
         }
         """
         usage_info = {}
-        descriptors = store.get_items(course.id, category='split_test')
-        for split_test in descriptors:
+        for split_test in split_tests:
             if split_test.user_partition_id not in usage_info:
                 usage_info[split_test.user_partition_id] = []
 
@@ -1144,24 +1188,28 @@ class GroupConfiguration(object):
             )
             usage_info[split_test.user_partition_id].append({
                 'label': '{} / {}'.format(unit.display_name, split_test.display_name),
-                'url': unit_url
+                'url': unit_url,
+                'validation': split_test.general_validation_message,
             })
         return usage_info
 
     @staticmethod
-    def add_usage_info(course, store):
+    def update_usage_info(store, course, configuration):
         """
-        Add usage information to group configurations json.
+        Update usage information for particular Group Configuration.
 
-        Returns json of group configurations updated with usage information.
+        Returns json of particular group configuration updated with usage information.
         """
-        usage_info = GroupConfiguration.get_usage_info(course, store)
-        configurations = []
-        for partition in course.user_partitions:
-            configuration = partition.to_json()
-            configuration['usage'] = usage_info.get(partition.id, [])
-            configurations.append(configuration)
-        return configurations
+        # Get all Experiments that use particular Group Configuration in course.
+        split_tests = store.get_items(
+            course.id,
+            category='split_test',
+            content={'user_partition_id': configuration.id}
+        )
+        configuration_json = configuration.to_json()
+        usage_information = GroupConfiguration._get_usage_info(store, course, split_tests)
+        configuration_json['usage'] = usage_information.get(configuration.id, [])
+        return configuration_json
 
 
 @require_http_methods(("GET", "POST"))
@@ -1249,7 +1297,8 @@ def group_configurations_detail_handler(request, course_key_string, group_config
         else:
             course.user_partitions.append(new_configuration)
         store.update_item(course, request.user.id)
-        return JsonResponse(new_configuration.to_json(), status=201)
+        configuration = GroupConfiguration.update_usage_info(store, course, new_configuration)
+        return JsonResponse(configuration, status=201)
     elif request.method == "DELETE":
         if not configuration:
             return JsonResponse(status=404)
