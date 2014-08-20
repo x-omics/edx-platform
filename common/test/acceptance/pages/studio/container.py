@@ -55,6 +55,15 @@ class ContainerPage(PageObject):
             Promise(_is_finished_loading, 'Finished rendering the xblock wrappers.').fulfill()
         )
 
+    def wait_for_component_menu(self):
+        """
+        Waits until the menu bar of components is present on the page.
+        """
+        EmptyPromise(
+            lambda: self.q(css='div.add-xblock-component').present,
+            'Wait for the menu of components to be present'
+        ).fulfill()
+
     @property
     def xblocks(self):
         """
@@ -124,6 +133,12 @@ class ContainerPage(PageObject):
         warning_text = warnings.first.text[0]
         return warning_text == "Caution: The last published version of this unit is live. By publishing changes you will change the student experience."
 
+    def shows_inherited_staff_lock(self, parent_type=None, parent_name=None):
+        """
+        Returns True if the unit inherits staff lock from a section or subsection.
+        """
+        return self.q(css='.bit-publishing .wrapper-visibility .copy .inherited-from').visible
+
     @property
     def publish_action(self):
         """
@@ -144,7 +159,7 @@ class ContainerPage(PageObject):
         """ Returns True if staff lock is currently enabled, False otherwise """
         return 'icon-check' in self.q(css='a.action-staff-lock>i').attrs('class')
 
-    def toggle_staff_lock(self):
+    def toggle_staff_lock(self, inherits_staff_lock=False):
         """
         Toggles "hide from students" which enables or disables a staff-only lock.
 
@@ -155,7 +170,8 @@ class ContainerPage(PageObject):
             self.q(css='a.action-staff-lock').first.click()
         else:
             click_css(self, 'a.action-staff-lock', 0, require_notification=False)
-            confirm_prompt(self)
+            if not inherits_staff_lock:
+                confirm_prompt(self)
         self.wait_for_ajax()
         return not was_locked_initially
 
