@@ -104,7 +104,7 @@ def find_courses_by_search(request):
 
     courses = get_courses_by_search(search_text, user, metadata)
     
-    return render_to_response("courseware/courses.html", {'courses': courses})
+    return render_to_response("courseware/filter.html", {'courses': courses})
 
 def find_courses_by_category(request):
     """
