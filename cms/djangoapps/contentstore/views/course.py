@@ -461,7 +461,6 @@ def _create_or_rerun_course(request):
                     status=400
                 )
 
-        course_key = SlashSeparatedCourseKey(org, number, run)
         fields = {'display_name': display_name, 'course_category': course_category} if display_name and course_category is not None else {}
 
         if 'source_course_key' in request.json:
