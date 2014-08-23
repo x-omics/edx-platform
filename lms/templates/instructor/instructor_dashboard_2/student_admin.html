@@ -35,6 +35,20 @@
 
   <hr>
 </div>
+<div class="student-certificate-container action-type-container" >
+
+<h2>${_("Student-specific add certificate")}</h2>
+  <div class="request-response-error"></div>
+  <p>
+    ${_("Specify the {platform_name} email address or username of a student here:").format(platform_name=settings.PLATFORM_NAME)}
+    <input type="text" name="student-select-certificate" placeholder="${_("Student Email or Username")}">
+  </p>
+  <br>
+  <p>
+    <input type="button" name="add-certificate-single" value="${_("add-certificate")}" data-endpoint="${ section_data['generate_certificate_single'] }">
+  </p>
+<hr>
+</div>
 
 <div class="student-grade-container action-type-container">
   <h2>${_("Student-specific grade adjustment")}</h2>
@@ -113,6 +127,18 @@
   </div>
 %endif
 
+%if settings.FEATURES.get('ENABLE_INSTRUCTOR_BACKGROUND_TASKS') and section_data['access']['instructor']:
+  <div class="course-certificate-containe action-type-container" >
+  <hr>
+  <h2>${_("Course-specific add certificate")}</h2>
+    <div class="request-response-error"></div>
+    <br>
+    <p>
+    <input type="button" class="molly-guard" name="add-certificate-all" value="${_("add certificate for all")}" data-endpoint="${ section_data['generate_certificate_all'] }">
+    </p>
+  <hr>
+  </div>
+%endif
 %if settings.FEATURES.get('ENABLE_INSTRUCTOR_BACKGROUND_TASKS'):
   <div class="running-tasks-container action-type-container">
     <hr>

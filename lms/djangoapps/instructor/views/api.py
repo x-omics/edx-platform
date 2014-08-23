@@ -12,6 +12,7 @@ import logging
 import re
 import requests
 from django.conf import settings
+from django.contrib.auth.models import User
 from django_future.csrf import ensure_csrf_cookie
 from django.views.decorators.cache import cache_control
 from django.core.exceptions import ValidationError
@@ -74,6 +75,11 @@ from .tools import (
 )
 from opaque_keys.edx.locations import SlashSeparatedCourseKey
 from opaque_keys import InvalidKeyError
+from certificates.queue import XQueueCertInterface
+from certificates.models import certificate_status_for_student, CertificateStatuses, GeneratedCertificate
+from xmodule.modulestore.django import modulestore
+import datetime
+from pytz import UTC
 
 log = logging.getLogger(__name__)
 
@@ -896,6 +902,58 @@ def get_student_progress_url(request, course_id):
     }
     return JsonResponse(response_payload)
 
+@ensure_csrf_cookie
+@cache_control(no_cache=True, no_store=True, must_revalidate=True)
+@common_exceptions_400
+@require_level('staff')
+def generate_certificate_single(request, course_id):
+    course_id = SlashSeparatedCourseKey.from_deprecated_string(course_id)
+    course = get_course_with_access(
+        request.user, 'staff', course_id, depth=None
+    )
+    student_identifier = request.GET.get('unique_student_identifier', None)
+    student = None
+    xq = XQueueCertInterface()
+    if student_identifier is not None:
+        if '@' in student_identifier:
+            student = User.objects.get(email=student_identifier, courseenrollment__course_id=course_id)
+        else:
+            student = User.objects.get(username=student_identifier, courseenrollment__course_id=course_id)
+        status = certificate_status_for_student(student, course_id)['status']
+        if status in [CertificateStatuses.unavailable, CertificateStatuses.notpassing, CertificateStatuses.error]:
+            log.info('Grading and certification requested for user {} in course {} via /request_certificate call'.format(student_identifier, course_id))
+            status = xq.regen_cert(student, course_id, course=course)
+        return HttpResponse(json.dumps({'add_status': status}), mimetype='application/json')
+
+@common_exceptions_400
+@require_level('staff')
+def generate_certificate_all(request, course_id):
+    course_id = SlashSeparatedCourseKey.from_deprecated_string(course_id)
+    all_students = request.GET.get('all_students', False) in ['true', 'True', True]
+    ended_courses = [course_id]
+    for course_key in ended_courses:
+        # prefetch all chapters/sequentials by saying depth=2
+        course = modulestore().get_course(course_key, depth=2)  
+        xq = XQueueCertInterface()
+        enrolled_students = User.objects.filter(courseenrollment__course_id=course_key)
+        total = enrolled_students.count()
+        log.info(total)
+        count = 0
+        start = datetime.datetime.now(UTC)
+        STATUS_INTERVAL = 500
+        for student in enrolled_students:
+            count += 1
+            if count % STATUS_INTERVAL == 0:
+                diff = datetime.datetime.now(UTC) - start
+                timeleft = diff * (total - count) / STATUS_INTERVAL
+                hours, remainder = divmod(timeleft.seconds, 3600)
+                minutes, seconds = divmod(remainder, 60)
+                start = datetime.datetime.now(UTC)
+            status = certificate_status_for_student(student, course_key)['status']
+            if status in [CertificateStatuses.unavailable, CertificateStatuses.notpassing, CertificateStatuses.error]:
+                log.info('Grading and certification requested for user {} in course {} via /request_certificate call'.format(student, course_id))
+                status = xq.regen_cert(student, course_key, course=course)
+            return HttpResponse(json.dumps({'add_status': status}), mimetype='application/json')
 
 @ensure_csrf_cookie
 @cache_control(no_cache=True, no_store=True, must_revalidate=True)

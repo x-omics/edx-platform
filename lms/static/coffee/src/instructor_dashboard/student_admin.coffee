@@ -32,10 +32,12 @@ class StudentAdmin
     # some buttons are optional because they can be flipped by the instructor task feature switch
     # student-specific
     @$field_student_select_progress = find_and_assert @$section, "input[name='student-select-progress']"
+    @$field_student_select_certificate  = find_and_assert @$section, "input[name='student-select-certificate']"
     @$field_student_select_grade  = find_and_assert @$section, "input[name='student-select-grade']"
     @$progress_link               = find_and_assert @$section, "a.progress-link"
     @$field_problem_select_single = find_and_assert @$section, "input[name='problem-select-single']"
     @$btn_reset_attempts_single   = find_and_assert @$section, "input[name='reset-attempts-single']"
+    @$btn_add_certificate_single  = find_and_assert @$section, "input[name='add-certificate-single']"
     @$btn_delete_state_single     = @$section.find "input[name='delete-state-single']"
     @$btn_rescore_problem_single  = @$section.find "input[name='rescore-problem-single']"
     @$btn_task_history_single     = @$section.find "input[name='task-history-single']"
@@ -44,6 +46,7 @@ class StudentAdmin
     # course-specific
     @$field_problem_select_all    = @$section.find "input[name='problem-select-all']"
     @$btn_reset_attempts_all      = @$section.find "input[name='reset-attempts-all']"
+    @$btn_add_certificate_all    = @$section.find "input[name='add-certificate-all']"
     @$btn_rescore_problem_all     = @$section.find "input[name='rescore-problem-all']"
     @$btn_task_history_all        = @$section.find "input[name='task-history-all']"
     @$table_task_history_all      = @$section.find ".task-history-all-table"
@@ -51,8 +54,10 @@ class StudentAdmin
 
     # response areas
     @$request_response_error_progress = find_and_assert @$section, ".student-specific-container .request-response-error"
+    @$request_response_error_certificate = find_and_assert @$section, ".student-certificate-container .request-response-error"
     @$request_response_error_grade = find_and_assert @$section, ".student-grade-container .request-response-error"
     @$request_response_error_all    = @$section.find ".course-specific-container .request-response-error"
+    @$request_response_error_certificate_all    = @$section.find ".course-certificate-container .request-response-error"
 
     # attach click handlers
 
@@ -72,6 +77,25 @@ class StudentAdmin
         success: @clear_errors_then (data) ->
           window.location = data.progress_url
         error: std_ajax_err => @$request_response_error_progress.text full_error_message
+
+    # add certificate for student 
+    @$btn_add_certificate_single.click =>
+      unique_student_identifier = @$field_student_select_certificate.val()
+      if not unique_student_identifier
+        return @$request_response_error_certificate.text gettext("Please enter a student email address or username.")
+      send_data =
+        unique_student_identifier: unique_student_identifier
+      success_message = gettext("Success!  certificate generated for student '<%= student_id %>'.")
+      error_message = gettext("Error certificate generated for student '<%= student_id %>'. Make sure that the student has passed the course.")
+      full_success_message = _.template(success_message, {student_id: unique_student_identifier})
+      full_error_message = _.template(error_message, {student_id: unique_student_identifier})
+
+      $.ajax
+        dataType: 'json'
+        url: @$btn_add_certificate_single.data 'endpoint'
+        data: send_data
+        success: @clear_errors_then -> alert full_success_message
+        error: std_ajax_err => @$request_response_error_certificate.text full_error_message
 
     # reset attempts for student on problem
     @$btn_reset_attempts_single.click =>
@@ -171,6 +195,26 @@ class StudentAdmin
           create_task_list_table @$table_task_history_single, data.tasks
         error: std_ajax_err => @$request_response_error_grade.text full_error_message
 
+    # start task to add certificates for all students
+    @$btn_add_certificate_all.click =>
+      confirm_message = gettext("Start task to add certificates for all students?")
+      full_confirm_message = _.template(confirm_message)
+      if window.confirm confirm_message
+        send_data =
+          all_students: true
+        success_message = gettext("Successfully started task to add certificates for all students . Click the 'Show Background Task History for Problem' button to see the status of the task.")
+        error_message = gettext("Error starting a task to add certificates for all students.")
+
+        $.ajax
+          dataType: 'json'
+          url: @$btn_add_certificate_all.data 'endpoint'
+          data: send_data
+          success: @clear_errors_then -> alert success_message
+          error: std_ajax_err => @$request_response_error_certificate_all.text error_message
+      else
+        # Clear error messages if "Cancel" was chosen on confirmation alert
+        @clear_errors()
+
     # start task to reset attempts on problem for all students
     @$btn_reset_attempts_all.click =>
       problem_to_reset = @$field_problem_select_all.val()
@@ -242,16 +286,20 @@ class StudentAdmin
   # wraps a function, but first clear the error displays
   clear_errors_then: (cb) ->
     @$request_response_error_progress.empty()
+    @$request_response_error_certificate.empty()
     @$request_response_error_grade.empty()
     @$request_response_error_all.empty()
+    @$request_response_error_certificate_all.empty()
     ->
       cb?.apply this, arguments
 
 
   clear_errors: ->
     @$request_response_error_progress.empty()
+    @$request_response_error_certificate.empty()
     @$request_response_error_grade.empty()
     @$request_response_error_all.empty()
+    @$request_response_error_certificate_all.empty()
 
   # handler for when the section title is clicked.
   onClickTitle: -> @instructor_tasks.task_poller.start()

@@ -273,6 +273,8 @@ def _section_student_admin(course_key, access):
         'rescore_problem_url': reverse('rescore_problem', kwargs={'course_id': course_key.to_deprecated_string()}),
         'list_instructor_tasks_url': reverse('list_instructor_tasks', kwargs={'course_id': course_key.to_deprecated_string()}),
         'spoc_gradebook_url': reverse('spoc_gradebook', kwargs={'course_id': course_key.to_deprecated_string()}),
+        'generate_certificate_single': reverse('generate_certificate_single', kwargs={'course_id': course_key.to_deprecated_string()}),
+        'generate_certificate_all': reverse('generate_certificate_all', kwargs={'course_id': course_key.to_deprecated_string()}),
     }
     return section_data
 
