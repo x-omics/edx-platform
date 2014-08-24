@@ -61,6 +61,16 @@
     </div>
   </div>
 
+  <div class="enroll-option">
+    <input type="checkbox" name="add-students" value="add-students-by-email" >
+    <label for="add-students">${_("add users by email")}</label>
+    <div class="hint add-students-hint">
+      <span class="hint-caret"></span>
+      <p> 
+  ${_("If this option is <em>checked</em>, system will add new users by emails.Default password is 'edx'")}
+      </p>
+    </div>
+  </div>
   <div>
     <input type="button" name="enrollment-button" class="enrollment-button" value="${_("Enroll")}" data-endpoint="${ section_data['enroll_button_url'] }" data-action="enroll" >
     <input type="button" name="enrollment-button" class="enrollment-button" value="${_("Unenroll")}" data-endpoint="${ section_data['unenroll_button_url'] }" data-action="unenroll" >

@@ -417,6 +417,11 @@ section.instructor-dashboard-content-2 {
     display: block;
   }
 
+  label[for="add-students"]:hover + .add-students-hint {
+    display: block;
+  }
+
+
   label[for="email-students-beta"]:hover + .email-students-beta-hint {
     width: 30%;
     display: block;

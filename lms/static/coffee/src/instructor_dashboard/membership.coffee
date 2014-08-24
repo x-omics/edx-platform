@@ -273,17 +273,20 @@ class BatchEnrollment
     @$enrollment_button      = @$container.find(".enrollment-button")
     @$checkbox_autoenroll    = @$container.find("input[name='auto-enroll']")
     @$checkbox_emailstudents = @$container.find("input[name='email-students']")
+    @$checkbox_addstudents   = @$container.find("input[name='add-students']")
     @$task_response          = @$container.find(".request-response")
     @$request_response_error = @$container.find(".request-response-error")
 
     # attach click handler for enrollment buttons
     @$enrollment_button.click (event) =>
       emailStudents = @$checkbox_emailstudents.is(':checked')
+      addStudents = @$checkbox_addstudents.is(':checked')
       send_data =
         action: $(event.target).data('action') # 'enroll' or 'unenroll'
         identifiers: @$identifier_input.val()
         auto_enroll: @$checkbox_autoenroll.is(':checked')
         email_students: emailStudents
+        add_students: addStudents
 
       $.ajax
         dataType: 'json'

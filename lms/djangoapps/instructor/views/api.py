@@ -40,7 +40,8 @@ from django_comment_common.models import (
 from edxmako.shortcuts import render_to_response
 from courseware.models import StudentModule
 from shoppingcart.models import Coupon, CourseRegistrationCode, RegistrationCodeRedemption
-from student.models import CourseEnrollment, unique_id_for_user, anonymous_id_for_user
+from student.models import CourseEnrollment, unique_id_for_user, anonymous_id_for_user, create_comments_service_user
+from student.views import _do_create_account, AccountValidationError
 import instructor_task.api
 from instructor_task.api_helper import AlreadyRunningError
 from instructor_task.models import ReportStore
@@ -231,6 +232,7 @@ def students_update_enrollment(request, course_id):
     - email_students is a boolean (defaults to false)
         If email_students is true, students will be sent email notification
         If email_students is false, students will not be sent email notification
+    - add_students is a boolean (defaults to false)
 
     Returns an analog to this JSON structure: {
         "action": "enroll",
@@ -261,7 +263,7 @@ def students_update_enrollment(request, course_id):
     identifiers = _split_input_list(identifiers_raw)
     auto_enroll = request.GET.get('auto_enroll') in ['true', 'True', True]
     email_students = request.GET.get('email_students') in ['true', 'True', True]
-
+    add_students = request.GET.get('add_students') in ['true', 'True', True]
     email_params = {}
     if email_students:
         course = get_course_by_id(course_id)
@@ -272,10 +274,30 @@ def students_update_enrollment(request, course_id):
         # First try to get a user object from the identifer
         user = None
         email = None
+        post_data = {
+            'username': identifier.split('@')[0],
+            'email': identifier,
+            'password': 'edx',
+            'name': identifier.split('@')[0],
+            'honor_code': u'true',
+            'terms_of_service': u'true',
+        }
         try:
             user = get_student_from_identifier(identifier)
         except User.DoesNotExist:
-            email = identifier
+            if add_students:
+                try:
+                    user, profile, reg = _do_create_account(post_data)
+                    reg.activate()
+                    reg.save()
+                    create_comments_service_user(user)
+                    log.info(user)
+                    email = user.email
+                except AccountValidationError as e:
+                    user = User.objects.get(email=identifier)
+                    email = identifier
+            else:
+                email = identifier
         else:
             email = user.email
 
