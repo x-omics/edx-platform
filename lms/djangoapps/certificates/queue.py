@@ -192,7 +192,7 @@ class XQueueCertInterface(object):
                 cert_mode = GeneratedCertificate.MODES.honor
             else:
                 # honor code and audit students
-                template_pdf = "certificate-template-{id.org}-{id.course}.pdf".format(id=course_id)
+                template_pdf = "certificate-template-{id.org}.pdf".format(id=course_id)
             if forced_grade:
                 grade['grade'] = forced_grade
 
@@ -249,17 +249,18 @@ class XQueueCertInterface(object):
 
     def _send_to_xqueue(self, contents, key):
 
-        if self.use_https:
-            proto = "https"
-        else:
-            proto = "http"
-
+        #if self.use_https:
+        #    proto = "https"
+        #else:
+        #    proto = "http"
+        proto = "http"
         xheader = make_xheader(
             '{0}://{1}/update_certificate?{2}'.format(
                 proto, settings.SITE_NAME, key), key, settings.CERT_QUEUE)
-
+        logger.info(xheader)
         (error, msg) = self.xqueue_interface.send_to_queue(
             header=xheader, body=json.dumps(contents))
+        logger.info(msg)
         if error:
             logger.critical('Unable to add a request to the queue: {} {}'.format(error, msg))
             raise Exception('Unable to send queue message')
