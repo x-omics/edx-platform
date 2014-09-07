@@ -104,8 +104,8 @@ FEATURES = {
     # Turn off Advanced Security by default
     'ADVANCED_SECURITY': False,
 
-    # Toggles Group Configuration editing functionality
-    'ENABLE_GROUP_CONFIGURATIONS': os.environ.get('FEATURE_GROUP_CONFIGURATIONS'),
+    # Modulestore to use for new courses
+    'DEFAULT_STORE_FOR_NEW_COURSE': 'mongo',
 }
 ENABLE_JASMINE = False
 
@@ -126,7 +126,7 @@ sys.path.append(COMMON_ROOT / 'lib')
 
 # For geolocation ip database
 GEOIP_PATH = REPO_ROOT / "common/static/data/geoip/GeoIP.dat"
-
+GEOIPV6_PATH = REPO_ROOT / "common/static/data/geoip/GeoIPv6.dat"
 
 ############################# WEB CONFIGURATION #############################
 # This is where we stick our compiled template files.

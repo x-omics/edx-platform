@@ -25,7 +25,7 @@ from course_modes.models import CourseMode
 from student.models import CourseEnrollment
 from student.views import reverification_info
 from shoppingcart.models import Order, CertificateItem
-from shoppingcart.processors.CyberSource import (
+from shoppingcart.processors import (
     get_signed_purchase_params, get_purchase_endpoint
 )
 from verify_student.models import (
@@ -82,7 +82,7 @@ class VerifyView(View):
         if not current_mode:
             return redirect(reverse('dashboard'))
         if course_id.to_deprecated_string() in request.session.get("donation_for_course", {}):
-            chosen_price = request.session["donation_for_course"][course_id.to_deprecated_string()]
+            chosen_price = request.session["donation_for_course"][unicode(course_id)]
         else:
             chosen_price = current_mode.min_price
 
@@ -111,6 +111,9 @@ class VerifyView(View):
             "upgrade": upgrade == u'True',
             "can_audit": CourseMode.mode_for_course(course_id, 'audit') is not None,
             "modes_dict": CourseMode.modes_for_course_dict(course_id),
+
+            # TODO (ECOM-16): Remove once the AB test completes
+            "autoreg": request.session.get('auto_register', False),
         }
 
         return render_to_response('verify_student/photo_verification.html', context)
@@ -142,7 +145,7 @@ class VerifiedView(View):
         if not current_mode:
             return redirect(reverse('dashboard'))
         if course_id.to_deprecated_string() in request.session.get("donation_for_course", {}):
-            chosen_price = request.session["donation_for_course"][course_id.to_deprecated_string()]
+            chosen_price = request.session["donation_for_course"][unicode(course_id)]
         else:
             chosen_price = current_mode.min_price
 
@@ -160,6 +163,9 @@ class VerifiedView(View):
             "upgrade": upgrade == u'True',
             "can_audit": "audit" in modes_dict,
             "modes_dict": modes_dict,
+
+            # TODO (ECOM-16): Remove once the AB test completes
+            "autoreg": request.session.get('auto_register', False),
         }
         return render_to_response('verify_student/verified.html', context)
 
@@ -183,15 +189,15 @@ def create_order(request):
     course_id = request.POST['course_id']
     course_id = SlashSeparatedCourseKey.from_deprecated_string(course_id)
     donation_for_course = request.session.get('donation_for_course', {})
-    current_donation = donation_for_course.get(course_id, decimal.Decimal(0))
-    contribution = request.POST.get("contribution", donation_for_course.get(course_id, 0))
+    current_donation = donation_for_course.get(unicode(course_id), decimal.Decimal(0))
+    contribution = request.POST.get("contribution", donation_for_course.get(unicode(course_id), 0))
     try:
         amount = decimal.Decimal(contribution).quantize(decimal.Decimal('.01'), rounding=decimal.ROUND_DOWN)
     except decimal.InvalidOperation:
         return HttpResponseBadRequest(_("Selected price is not valid number."))
 
     if amount != current_donation:
-        donation_for_course[course_id] = amount
+        donation_for_course[unicode(course_id)] = amount
         request.session['donation_for_course'] = donation_for_course
 
     # prefer professional mode over verified_mode
@@ -213,7 +219,12 @@ def create_order(request):
     enrollment_mode = current_mode.slug
     CertificateItem.add_to_order(cart, course_id, amount, enrollment_mode)
 
-    params = get_signed_purchase_params(cart)
+    callback_url = request.build_absolute_uri(
+        reverse("shoppingcart.views.postpay_callback")
+    )
+    params = get_signed_purchase_params(
+        cart, callback_url=callback_url
+    )
 
     return HttpResponse(json.dumps(params), content_type="text/json")
 
@@ -326,6 +337,9 @@ def show_requirements(request, course_id):
         "is_not_active": not request.user.is_active,
         "upgrade": upgrade == u'True',
         "modes_dict": modes_dict,
+
+        # TODO (ECOM-16): Remove once the AB test completes
+        "autoreg": request.session.get('auto_register', False),
     }
     return render_to_response("verify_student/show_requirements.html", context)
 

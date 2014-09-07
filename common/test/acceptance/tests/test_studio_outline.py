@@ -1,16 +1,16 @@
 """
 Acceptance tests for studio related to the outline page.
 """
-from nose.plugins.attrib import attr
-
 from datetime import datetime, timedelta
 import itertools
 from pytz import UTC
 from bok_choy.promise import EmptyPromise
 
 from ..pages.studio.overview import CourseOutlinePage, ContainerPage, ExpandCollapseLinkState
-from ..pages.studio.utils import add_discussion
+from ..pages.studio.utils import add_discussion, drag, verify_ordering
 from ..pages.lms.courseware import CoursewarePage
+from ..pages.lms.course_nav import CourseNavPage
+from ..pages.lms.staff_view import StaffPage
 from ..fixtures.course import XBlockFixtureDesc
 
 from .base_studio_test import StudioCourseTest
@@ -51,8 +51,76 @@ class CourseOutlineTest(StudioCourseTest):
             )
         )
 
+    def do_action_and_verify(self, outline_page, action, expected_ordering):
+        """
+        Perform the supplied action and then verify the resulting ordering.
+        """
+        if outline_page is None:
+            outline_page = self.course_outline_page.visit()
 
-@attr('shard_2')
+        action(outline_page)
+        verify_ordering(self, outline_page, expected_ordering)
+
+        # Reload the page and expand all subsections to see that the change was persisted.
+        outline_page = self.course_outline_page.visit()
+        outline_page.q(css='.outline-item.outline-subsection.is-collapsed .ui-toggle-expansion').click()
+        verify_ordering(self, outline_page, expected_ordering)
+
+
+class CourseOutlineDragAndDropTest(CourseOutlineTest):
+    """
+    Tests of drag and drop within the outline page.
+    """
+    __test__ = True
+
+    def populate_course_fixture(self, course_fixture):
+        """
+        Create a course with one section, two subsections, and four units
+        """
+        # with collapsed outline
+        self.chap_1_handle = 0
+        self.chap_1_seq_1_handle = 1
+
+        # with first sequential expanded
+        self.seq_1_vert_1_handle = 2
+        self.seq_1_vert_2_handle = 3
+        self.chap_1_seq_2_handle = 4
+
+        course_fixture.add_children(
+            XBlockFixtureDesc('chapter', "1").add_children(
+                XBlockFixtureDesc('sequential', '1.1').add_children(
+                    XBlockFixtureDesc('vertical', '1.1.1'),
+                    XBlockFixtureDesc('vertical', '1.1.2')
+                ),
+                XBlockFixtureDesc('sequential', '1.2').add_children(
+                    XBlockFixtureDesc('vertical', '1.2.1'),
+                    XBlockFixtureDesc('vertical', '1.2.2')
+                )
+            )
+        )
+
+    def drag_and_verify(self, source, target, expected_ordering, outline_page=None):
+        self.do_action_and_verify(
+            outline_page,
+            lambda (outline): drag(outline, source, target),
+            expected_ordering
+        )
+
+    def test_drop_unit_in_collapsed_subsection(self):
+        """
+        Drag vertical "1.1.2" from subsection "1.1" into collapsed subsection "1.2" which already
+        have its own verticals.
+        """
+        course_outline_page = self.course_outline_page.visit()
+        # expand first subsection
+        course_outline_page.q(css='.outline-item.outline-subsection.is-collapsed .ui-toggle-expansion').first.click()
+
+        expected_ordering = [{"1": ["1.1", "1.2"]},
+                             {"1.1": ["1.1.1"]},
+                             {"1.2": ["1.1.2", "1.2.1", "1.2.2"]}]
+        self.drag_and_verify(self.seq_1_vert_2_handle, self.chap_1_seq_2_handle, expected_ordering, course_outline_page)
+
+
 class WarningMessagesTest(CourseOutlineTest):
     """
     Feature: Warning messages on sections, subsections, and units
@@ -119,7 +187,9 @@ class WarningMessagesTest(CourseOutlineTest):
         return XBlockFixtureDesc('chapter', name).add_children(
             subsection if unit_state.publish_state == self.PublishState.NEVER_PUBLISHED
             else subsection.add_children(
-                XBlockFixtureDesc('vertical', name, metadata={'visible_to_staff_only': unit_state.is_locked})
+                XBlockFixtureDesc('vertical', name, metadata={
+                    'visible_to_staff_only': True if unit_state.is_locked else None
+                })
             )
         )
 
@@ -255,7 +325,6 @@ class WarningMessagesTest(CourseOutlineTest):
             unit.toggle_staff_lock()
 
 
-@attr('shard_2')
 class EditingSectionsTest(CourseOutlineTest):
     """
     Feature: Editing Release date, Due date and grading type.
@@ -403,7 +472,387 @@ class EditingSectionsTest(CourseOutlineTest):
         self.assertIn(release_text, self.course_outline_page.section_at(0).subsection_at(0).release_date)
 
 
-@attr('shard_2')
+class StaffLockTest(CourseOutlineTest):
+    """
+    Feature: Sections, subsections, and units can be locked and unlocked from the course outline.
+    """
+
+    __test__ = True
+
+    def populate_course_fixture(self, course_fixture):
+        """ Create a course with one section, two subsections, and four units """
+        course_fixture.add_children(
+            XBlockFixtureDesc('chapter', '1').add_children(
+                XBlockFixtureDesc('sequential', '1.1').add_children(
+                    XBlockFixtureDesc('vertical', '1.1.1'),
+                    XBlockFixtureDesc('vertical', '1.1.2')
+                ),
+                XBlockFixtureDesc('sequential', '1.2').add_children(
+                    XBlockFixtureDesc('vertical', '1.2.1'),
+                    XBlockFixtureDesc('vertical', '1.2.2')
+                )
+            )
+        )
+
+    def _verify_descendants_are_staff_only(self, item):
+        """Verifies that all the descendants of item are staff only"""
+        self.assertTrue(item.is_staff_only)
+        if hasattr(item, 'children'):
+            for child in item.children():
+                self._verify_descendants_are_staff_only(child)
+
+    def _remove_staff_lock_and_verify_warning(self, outline_item, expect_warning):
+        """Removes staff lock from a course outline item and checks whether or not a warning appears."""
+        modal = outline_item.edit()
+        modal.is_explicitly_locked = False
+        if expect_warning:
+            self.assertTrue(modal.shows_staff_lock_warning())
+        else:
+            self.assertFalse(modal.shows_staff_lock_warning())
+        modal.save()
+
+    def _toggle_lock_on_unlocked_item(self, outline_item):
+        """Toggles outline_item's staff lock on and then off, verifying the staff lock warning"""
+        self.assertFalse(outline_item.has_staff_lock_warning)
+        outline_item.set_staff_lock(True)
+        self.assertTrue(outline_item.has_staff_lock_warning)
+        self._verify_descendants_are_staff_only(outline_item)
+        outline_item.set_staff_lock(False)
+        self.assertFalse(outline_item.has_staff_lock_warning)
+
+    def _verify_explicit_staff_lock_remains_after_unlocking_parent(self, child_item, parent_item):
+        """Verifies that child_item's explicit staff lock remains after removing parent_item's staff lock"""
+        child_item.set_staff_lock(True)
+        parent_item.set_staff_lock(True)
+        self.assertTrue(parent_item.has_staff_lock_warning)
+        self.assertTrue(child_item.has_staff_lock_warning)
+        parent_item.set_staff_lock(False)
+        self.assertFalse(parent_item.has_staff_lock_warning)
+        self.assertTrue(child_item.has_staff_lock_warning)
+
+    def test_units_can_be_locked(self):
+        """
+        Scenario: Units can be locked and unlocked from the course outline page
+            Given I have a course with a unit
+            When I click on the configuration icon
+            And I enable explicit staff locking
+            And I click save
+            Then the unit shows a staff lock warning
+            And when I click on the configuration icon
+            And I disable explicit staff locking
+            And I click save
+            Then the unit does not show a staff lock warning
+        """
+        self.course_outline_page.visit()
+        self.course_outline_page.expand_all_subsections()
+        unit = self.course_outline_page.section_at(0).subsection_at(0).unit_at(0)
+        self._toggle_lock_on_unlocked_item(unit)
+
+    def test_subsections_can_be_locked(self):
+        """
+        Scenario: Subsections can be locked and unlocked from the course outline page
+            Given I have a course with a subsection
+            When I click on the subsection's configuration icon
+            And I enable explicit staff locking
+            And I click save
+            Then the subsection shows a staff lock warning
+            And all its descendants are staff locked
+            And when I click on the subsection's configuration icon
+            And I disable explicit staff locking
+            And I click save
+            Then the the subsection does not show a staff lock warning
+        """
+        self.course_outline_page.visit()
+        self.course_outline_page.expand_all_subsections()
+        subsection = self.course_outline_page.section_at(0).subsection_at(0)
+        self._toggle_lock_on_unlocked_item(subsection)
+
+    def test_sections_can_be_locked(self):
+        """
+        Scenario: Sections can be locked and unlocked from the course outline page
+            Given I have a course with a section
+            When I click on the section's configuration icon
+            And I enable explicit staff locking
+            And I click save
+            Then the section shows a staff lock warning
+            And all its descendants are staff locked
+            And when I click on the section's configuration icon
+            And I disable explicit staff locking
+            And I click save
+            Then the section does not show a staff lock warning
+        """
+        self.course_outline_page.visit()
+        self.course_outline_page.expand_all_subsections()
+        section = self.course_outline_page.section_at(0)
+        self._toggle_lock_on_unlocked_item(section)
+
+    def test_explicit_staff_lock_remains_after_unlocking_section(self):
+        """
+        Scenario: An explicitly locked unit is still locked after removing an inherited lock from a section
+            Given I have a course with sections, subsections, and units
+            And I have enabled explicit staff lock on a section and one of its units
+            When I click on the section's configuration icon
+            And I disable explicit staff locking
+            And I click save
+            Then the unit still shows a staff lock warning
+        """
+        self.course_outline_page.visit()
+        self.course_outline_page.expand_all_subsections()
+        section = self.course_outline_page.section_at(0)
+        unit = section.subsection_at(0).unit_at(0)
+        self._verify_explicit_staff_lock_remains_after_unlocking_parent(unit, section)
+
+    def test_explicit_staff_lock_remains_after_unlocking_subsection(self):
+        """
+        Scenario: An explicitly locked unit is still locked after removing an inherited lock from a subsection
+            Given I have a course with sections, subsections, and units
+            And I have enabled explicit staff lock on a subsection and one of its units
+            When I click on the subsection's configuration icon
+            And I disable explicit staff locking
+            And I click save
+            Then the unit still shows a staff lock warning
+        """
+        self.course_outline_page.visit()
+        self.course_outline_page.expand_all_subsections()
+        subsection = self.course_outline_page.section_at(0).subsection_at(0)
+        unit = subsection.unit_at(0)
+        self._verify_explicit_staff_lock_remains_after_unlocking_parent(unit, subsection)
+
+    def test_section_displays_lock_when_all_subsections_locked(self):
+        """
+        Scenario: All subsections in section are explicitly locked, section should display staff only warning
+            Given I have a course one section and two subsections
+            When I enable explicit staff lock on all the subsections
+            Then the section shows a staff lock warning
+        """
+        self.course_outline_page.visit()
+        section = self.course_outline_page.section_at(0)
+        section.subsection_at(0).set_staff_lock(True)
+        section.subsection_at(1).set_staff_lock(True)
+        self.assertTrue(section.has_staff_lock_warning)
+
+    def test_section_displays_lock_when_all_units_locked(self):
+        """
+        Scenario: All units in a section are explicitly locked, section should display staff only warning
+            Given I have a course with one section, two subsections, and four units
+            When I enable explicit staff lock on all the units
+            Then the section shows a staff lock warning
+        """
+        self.course_outline_page.visit()
+        self.course_outline_page.expand_all_subsections()
+        section = self.course_outline_page.section_at(0)
+        section.subsection_at(0).unit_at(0).set_staff_lock(True)
+        section.subsection_at(0).unit_at(1).set_staff_lock(True)
+        section.subsection_at(1).unit_at(0).set_staff_lock(True)
+        section.subsection_at(1).unit_at(1).set_staff_lock(True)
+        self.assertTrue(section.has_staff_lock_warning)
+
+    def test_subsection_displays_lock_when_all_units_locked(self):
+        """
+        Scenario: All units in subsection are explicitly locked, subsection should display staff only warning
+            Given I have a course with one subsection and two units
+            When I enable explicit staff lock on all the units
+            Then the subsection shows a staff lock warning
+        """
+        self.course_outline_page.visit()
+        self.course_outline_page.expand_all_subsections()
+        subsection = self.course_outline_page.section_at(0).subsection_at(0)
+        subsection.unit_at(0).set_staff_lock(True)
+        subsection.unit_at(1).set_staff_lock(True)
+        self.assertTrue(subsection.has_staff_lock_warning)
+
+    def test_section_does_not_display_lock_when_some_subsections_locked(self):
+        """
+        Scenario: Only some subsections in section are explicitly locked, section should NOT display staff only warning
+            Given I have a course with one section and two subsections
+            When I enable explicit staff lock on one subsection
+            Then the section does not show a staff lock warning
+        """
+        self.course_outline_page.visit()
+        section = self.course_outline_page.section_at(0)
+        section.subsection_at(0).set_staff_lock(True)
+        self.assertFalse(section.has_staff_lock_warning)
+
+    def test_section_does_not_display_lock_when_some_units_locked(self):
+        """
+        Scenario: Only some units in section are explicitly locked, section should NOT display staff only warning
+            Given I have a course with one section, two subsections, and four units
+            When I enable explicit staff lock on three units
+            Then the section does not show a staff lock warning
+        """
+        self.course_outline_page.visit()
+        self.course_outline_page.expand_all_subsections()
+        section = self.course_outline_page.section_at(0)
+        section.subsection_at(0).unit_at(0).set_staff_lock(True)
+        section.subsection_at(0).unit_at(1).set_staff_lock(True)
+        section.subsection_at(1).unit_at(1).set_staff_lock(True)
+        self.assertFalse(section.has_staff_lock_warning)
+
+    def test_subsection_does_not_display_lock_when_some_units_locked(self):
+        """
+        Scenario: Only some units in subsection are explicitly locked, subsection should NOT display staff only warning
+            Given I have a course with one subsection and two units
+            When I enable explicit staff lock on one unit
+            Then the subsection does not show a staff lock warning
+        """
+        self.course_outline_page.visit()
+        self.course_outline_page.expand_all_subsections()
+        subsection = self.course_outline_page.section_at(0).subsection_at(0)
+        subsection.unit_at(0).set_staff_lock(True)
+        self.assertFalse(subsection.has_staff_lock_warning)
+
+    def test_locked_sections_do_not_appear_in_lms(self):
+        """
+        Scenario: A locked section is not visible to students in the LMS
+            Given I have a course with two sections
+            When I enable explicit staff lock on one section
+            And I click the View Live button to switch to staff view
+            Then I see two sections in the sidebar
+            And when I click to toggle to student view
+            Then I see one section in the sidebar
+        """
+        self.course_outline_page.visit()
+        self.course_outline_page.add_section_from_top_button()
+        self.course_outline_page.section_at(1).set_staff_lock(True)
+        self.course_outline_page.view_live()
+        courseware = CoursewarePage(self.browser, self.course_id)
+        courseware.wait_for_page()
+        self.assertEqual(courseware.num_sections, 2)
+        StaffPage(self.browser).toggle_staff_view()
+        self.assertEqual(courseware.num_sections, 1)
+
+    def test_locked_subsections_do_not_appear_in_lms(self):
+        """
+        Scenario: A locked subsection is not visible to students in the LMS
+            Given I have a course with two subsections
+            When I enable explicit staff lock on one subsection
+            And I click the View Live button to switch to staff view
+            Then I see two subsections in the sidebar
+            And when I click to toggle to student view
+            Then I see one section in the sidebar
+        """
+        self.course_outline_page.visit()
+        self.course_outline_page.section_at(0).subsection_at(1).set_staff_lock(True)
+        self.course_outline_page.view_live()
+        courseware = CoursewarePage(self.browser, self.course_id)
+        courseware.wait_for_page()
+        self.assertEqual(courseware.num_subsections, 2)
+        StaffPage(self.browser).toggle_staff_view()
+        self.assertEqual(courseware.num_subsections, 1)
+
+    def test_toggling_staff_lock_on_section_does_not_publish_draft_units(self):
+        """
+        Scenario: Locking and unlocking a section will not publish its draft units
+            Given I have a course with a section and unit
+            And the unit has a draft and published version
+            When I enable explicit staff lock on the section
+            And I disable explicit staff lock on the section
+            And I click the View Live button to switch to staff view
+            Then I see the published version of the unit
+        """
+        self.course_outline_page.visit()
+        self.course_outline_page.expand_all_subsections()
+        unit = self.course_outline_page.section_at(0).subsection_at(0).unit_at(0).go_to()
+        add_discussion(unit)
+        self.course_outline_page.visit()
+        self.course_outline_page.expand_all_subsections()
+        section = self.course_outline_page.section_at(0)
+        section.set_staff_lock(True)
+        section.set_staff_lock(False)
+        unit = section.subsection_at(0).unit_at(0).go_to()
+        unit.view_published_version()
+        courseware = CoursewarePage(self.browser, self.course_id)
+        courseware.wait_for_page()
+        self.assertEqual(courseware.num_xblock_components, 0)
+
+    def test_toggling_staff_lock_on_subsection_does_not_publish_draft_units(self):
+        """
+        Scenario: Locking and unlocking a subsection will not publish its draft units
+            Given I have a course with a subsection and unit
+            And the unit has a draft and published version
+            When I enable explicit staff lock on the subsection
+            And I disable explicit staff lock on the subsection
+            And I click the View Live button to switch to staff view
+            Then I see the published version of the unit
+        """
+        self.course_outline_page.visit()
+        self.course_outline_page.expand_all_subsections()
+        unit = self.course_outline_page.section_at(0).subsection_at(0).unit_at(0).go_to()
+        add_discussion(unit)
+        self.course_outline_page.visit()
+        self.course_outline_page.expand_all_subsections()
+        subsection = self.course_outline_page.section_at(0).subsection_at(0)
+        subsection.set_staff_lock(True)
+        subsection.set_staff_lock(False)
+        unit = subsection.unit_at(0).go_to()
+        unit.view_published_version()
+        courseware = CoursewarePage(self.browser, self.course_id)
+        courseware.wait_for_page()
+        self.assertEqual(courseware.num_xblock_components, 0)
+
+    def test_removing_staff_lock_from_unit_without_inherited_lock_shows_warning(self):
+        """
+        Scenario: Removing explicit staff lock from a unit which does not inherit staff lock displays a warning.
+            Given I have a course with a subsection and unit
+            When I enable explicit staff lock on the unit
+            And I disable explicit staff lock on the unit
+            Then I see a modal warning.
+        """
+        self.course_outline_page.visit()
+        self.course_outline_page.expand_all_subsections()
+        unit = self.course_outline_page.section_at(0).subsection_at(0).unit_at(0)
+        unit.set_staff_lock(True)
+        self._remove_staff_lock_and_verify_warning(unit, True)
+
+    def test_removing_staff_lock_from_subsection_without_inherited_lock_shows_warning(self):
+        """
+        Scenario: Removing explicit staff lock from a subsection which does not inherit staff lock displays a warning.
+            Given I have a course with a section and subsection
+            When I enable explicit staff lock on the subsection
+            And I disable explicit staff lock on the subsection
+            Then I see a modal warning.
+        """
+        self.course_outline_page.visit()
+        self.course_outline_page.expand_all_subsections()
+        subsection = self.course_outline_page.section_at(0).subsection_at(0)
+        subsection.set_staff_lock(True)
+        self._remove_staff_lock_and_verify_warning(subsection, True)
+
+    def test_removing_staff_lock_from_unit_with_inherited_lock_shows_no_warning(self):
+        """
+        Scenario: Removing explicit staff lock from a unit which also inherits staff lock displays no warning.
+            Given I have a course with a subsection and unit
+            When I enable explicit staff lock on the subsection
+            And I enable explicit staff lock on the unit
+            When I disable explicit staff lock on the unit
+            Then I do not see a modal warning.
+        """
+        self.course_outline_page.visit()
+        self.course_outline_page.expand_all_subsections()
+        subsection = self.course_outline_page.section_at(0).subsection_at(0)
+        unit = subsection.unit_at(0)
+        subsection.set_staff_lock(True)
+        unit.set_staff_lock(True)
+        self._remove_staff_lock_and_verify_warning(unit, False)
+
+    def test_removing_staff_lock_from_subsection_with_inherited_lock_shows_no_warning(self):
+        """
+        Scenario: Removing explicit staff lock from a subsection which also inherits staff lock displays no warning.
+            Given I have a course with a section and subsection
+            When I enable explicit staff lock on the section
+            And I enable explicit staff lock on the subsection
+            When I disable explicit staff lock on the subsection
+            Then I do not see a modal warning.
+        """
+        self.course_outline_page.visit()
+        self.course_outline_page.expand_all_subsections()
+        section = self.course_outline_page.section_at(0)
+        subsection = section.subsection_at(0)
+        section.set_staff_lock(True)
+        subsection.set_staff_lock(True)
+        self._remove_staff_lock_and_verify_warning(subsection, False)
+
+
 class EditNamesTest(CourseOutlineTest):
     """
     Feature: Click-to-edit section/subsection names
@@ -519,7 +968,6 @@ class EditNamesTest(CourseOutlineTest):
         self.assertTrue(self.course_outline_page.section_at(0).is_collapsed)
 
 
-@attr('shard_2')
 class CreateSectionsTest(CourseOutlineTest):
     """
     Feature: Create new sections/subsections/units
@@ -593,7 +1041,6 @@ class CreateSectionsTest(CourseOutlineTest):
         self.assertTrue(unit_page.is_inline_editing_display_name())
 
 
-@attr('shard_2')
 class DeleteContentTest(CourseOutlineTest):
     """
     Feature: Deleting sections/subsections/units
@@ -705,7 +1152,6 @@ class DeleteContentTest(CourseOutlineTest):
         self.assertTrue(self.course_outline_page.has_no_content_message)
 
 
-@attr('shard_2')
 class ExpandCollapseMultipleSectionsTest(CourseOutlineTest):
     """
     Feature: Courses with multiple sections can expand and collapse all sections.
@@ -837,7 +1283,6 @@ class ExpandCollapseMultipleSectionsTest(CourseOutlineTest):
         self.verify_all_sections(collapsed=False)
 
 
-@attr('shard_2')
 class ExpandCollapseSingleSectionTest(CourseOutlineTest):
     """
     Feature: Courses with a single section can expand and collapse all sections.
@@ -877,7 +1322,6 @@ class ExpandCollapseSingleSectionTest(CourseOutlineTest):
         self.assertFalse(self.course_outline_page.section_at(0).subsection_at(1).is_collapsed)
 
 
-@attr('shard_2')
 class ExpandCollapseEmptyTest(CourseOutlineTest):
     """
     Feature: Courses with no sections initially can expand and collapse all sections after addition.
@@ -915,7 +1359,6 @@ class ExpandCollapseEmptyTest(CourseOutlineTest):
         self.assertFalse(self.course_outline_page.section_at(0).is_collapsed)
 
 
-@attr('shard_2')
 class DefaultStatesEmptyTest(CourseOutlineTest):
     """
     Feature: Misc course outline default states/actions when starting with an empty course
@@ -940,7 +1383,6 @@ class DefaultStatesEmptyTest(CourseOutlineTest):
         self.assertTrue(self.course_outline_page.bottom_add_section_button.is_present())
 
 
-@attr('shard_2')
 class DefaultStatesContentTest(CourseOutlineTest):
     """
     Feature: Misc course outline default states/actions when starting with a course with content
@@ -965,7 +1407,6 @@ class DefaultStatesContentTest(CourseOutlineTest):
         self.assertEqual(courseware.xblock_component_type(2), 'discussion')
 
 
-@attr('shard_2')
 class UnitNavigationTest(CourseOutlineTest):
     """
     Feature: Navigate to units
@@ -984,3 +1425,128 @@ class UnitNavigationTest(CourseOutlineTest):
         self.course_outline_page.section_at(0).subsection_at(0).toggle_expand()
         unit = self.course_outline_page.section_at(0).subsection_at(0).unit_at(0).go_to()
         self.assertTrue(unit.is_browser_on_page)
+
+
+class PublishSectionTest(CourseOutlineTest):
+    """
+    Feature: Publish sections.
+    """
+
+    __test__ = True
+
+    def populate_course_fixture(self, course_fixture):
+        """
+        Sets up a course structure with 2 subsections inside a single section.
+        The first subsection has 2 units, and the second subsection has one unit.
+        """
+        self.courseware = CoursewarePage(self.browser, self.course_id)
+        self.course_nav = CourseNavPage(self.browser)
+        course_fixture.add_children(
+            XBlockFixtureDesc('chapter', SECTION_NAME).add_children(
+                XBlockFixtureDesc('sequential', SUBSECTION_NAME).add_children(
+                    XBlockFixtureDesc('vertical', UNIT_NAME),
+                    XBlockFixtureDesc('vertical', 'Test Unit 2'),
+                ),
+                XBlockFixtureDesc('sequential', 'Test Subsection 2').add_children(
+                    XBlockFixtureDesc('vertical', 'Test Unit 3'),
+                ),
+            ),
+        )
+
+    def test_unit_publishing(self):
+        """
+        Scenario: Can publish a unit and see published content in LMS
+            Given I have a section with 2 subsections and 3 unpublished units
+            When I go to the course outline
+            Then I see publish button for the first unit, subsection, section
+            When I publish the first unit
+            Then I see that publish button for the first unit disappears
+            And I see publish buttons for subsection, section
+            And I see the changed content in LMS
+        """
+        self._add_unpublished_content()
+        self.course_outline_page.visit()
+        section, subsection, unit = self._get_items()
+        self.assertTrue(unit.publish_action)
+        self.assertTrue(subsection.publish_action)
+        self.assertTrue(section.publish_action)
+        unit.publish()
+        self.assertFalse(unit.publish_action)
+        self.assertTrue(subsection.publish_action)
+        self.assertTrue(section.publish_action)
+        self.courseware.visit()
+        self.assertEqual(1, self.courseware.num_xblock_components)
+
+    def test_subsection_publishing(self):
+        """
+        Scenario: Can publish a subsection and see published content in LMS
+            Given I have a section with 2 subsections and 3 unpublished units
+            When I go to the course outline
+            Then I see publish button for the unit, subsection, section
+            When I publish the first subsection
+            Then I see that publish button for the first subsection disappears
+            And I see that publish buttons disappear for the child units of the subsection
+            And I see publish button for section
+            And I see the changed content in LMS
+        """
+        self._add_unpublished_content()
+        self.course_outline_page.visit()
+        section, subsection, unit = self._get_items()
+        self.assertTrue(unit.publish_action)
+        self.assertTrue(subsection.publish_action)
+        self.assertTrue(section.publish_action)
+        self.course_outline_page.section(SECTION_NAME).subsection(SUBSECTION_NAME).publish()
+        self.assertFalse(unit.publish_action)
+        self.assertFalse(subsection.publish_action)
+        self.assertTrue(section.publish_action)
+        self.courseware.visit()
+        self.assertEqual(1, self.courseware.num_xblock_components)
+        self.course_nav.go_to_sequential_position(2)
+        self.assertEqual(1, self.courseware.num_xblock_components)
+
+    def test_section_publishing(self):
+        """
+        Scenario: Can publish a section and see published content in LMS
+            Given I have a section with 2 subsections and 3 unpublished units
+            When I go to the course outline
+            Then I see publish button for the unit, subsection, section
+            When I publish the section
+            Then I see that publish buttons disappears
+            And I see the changed content in LMS
+        """
+        self._add_unpublished_content()
+        self.course_outline_page.visit()
+        section, subsection, unit = self._get_items()
+        self.assertTrue(subsection.publish_action)
+        self.assertTrue(section.publish_action)
+        self.assertTrue(unit.publish_action)
+        self.course_outline_page.section(SECTION_NAME).publish()
+        self.assertFalse(subsection.publish_action)
+        self.assertFalse(section.publish_action)
+        self.assertFalse(unit.publish_action)
+        self.courseware.visit()
+        self.assertEqual(1, self.courseware.num_xblock_components)
+        self.course_nav.go_to_sequential_position(2)
+        self.assertEqual(1, self.courseware.num_xblock_components)
+        self.course_nav.go_to_section(SECTION_NAME, 'Test Subsection 2')
+        self.assertEqual(1, self.courseware.num_xblock_components)
+
+    def _add_unpublished_content(self):
+        """
+        Adds unpublished HTML content to first three units in the course.
+        """
+        for index in xrange(3):
+            self.course_fixture.create_xblock(
+                self.course_fixture.get_nested_xblocks(category="vertical")[index].locator,
+                XBlockFixtureDesc('html', 'Unpublished HTML Component ' + str(index)),
+            )
+
+    def _get_items(self):
+        """
+        Returns first section, subsection, and unit on the page.
+        """
+        section = self.course_outline_page.section(SECTION_NAME)
+        subsection = section.subsection(SUBSECTION_NAME)
+        unit = subsection.toggle_expand().unit(UNIT_NAME)
+
+        return (section, subsection, unit)
