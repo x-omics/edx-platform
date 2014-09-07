@@ -72,7 +72,7 @@ def delete_course_and_groups(course_key, user_id):
     """
     module_store = modulestore()
 
-    with module_store.bulk_write_operations(course_key):
+    with module_store.bulk_operations(course_key):
         module_store.delete_course(course_key, user_id)
 
         print 'removing User permissions from course....'
@@ -146,7 +146,7 @@ def get_lms_link_for_about_page(course_key):
 def course_image_url(course):
     """Returns the image url for the course."""
     loc = StaticContent.compute_location(course.location.course_key, course.course_image)
-    path = loc.to_deprecated_string()
+    path = StaticContent.serialize_asset_key_with_slash(loc)
     return path
 
 

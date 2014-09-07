@@ -1,16 +1,15 @@
 """
 Acceptance tests for studio related to the outline page.
 """
-from nose.plugins.attrib import attr
-
 from datetime import datetime, timedelta
 import itertools
 from pytz import UTC
 from bok_choy.promise import EmptyPromise
 
 from ..pages.studio.overview import CourseOutlinePage, ContainerPage, ExpandCollapseLinkState
-from ..pages.studio.utils import add_discussion
+from ..pages.studio.utils import add_discussion, drag, verify_ordering
 from ..pages.lms.courseware import CoursewarePage
+from ..pages.lms.course_nav import CourseNavPage
 from ..pages.lms.staff_view import StaffPage
 from ..fixtures.course import XBlockFixtureDesc
 
@@ -52,8 +51,76 @@ class CourseOutlineTest(StudioCourseTest):
             )
         )
 
+    def do_action_and_verify(self, outline_page, action, expected_ordering):
+        """
+        Perform the supplied action and then verify the resulting ordering.
+        """
+        if outline_page is None:
+            outline_page = self.course_outline_page.visit()
 
-@attr('shard_2')
+        action(outline_page)
+        verify_ordering(self, outline_page, expected_ordering)
+
+        # Reload the page and expand all subsections to see that the change was persisted.
+        outline_page = self.course_outline_page.visit()
+        outline_page.q(css='.outline-item.outline-subsection.is-collapsed .ui-toggle-expansion').click()
+        verify_ordering(self, outline_page, expected_ordering)
+
+
+class CourseOutlineDragAndDropTest(CourseOutlineTest):
+    """
+    Tests of drag and drop within the outline page.
+    """
+    __test__ = True
+
+    def populate_course_fixture(self, course_fixture):
+        """
+        Create a course with one section, two subsections, and four units
+        """
+        # with collapsed outline
+        self.chap_1_handle = 0
+        self.chap_1_seq_1_handle = 1
+
+        # with first sequential expanded
+        self.seq_1_vert_1_handle = 2
+        self.seq_1_vert_2_handle = 3
+        self.chap_1_seq_2_handle = 4
+
+        course_fixture.add_children(
+            XBlockFixtureDesc('chapter', "1").add_children(
+                XBlockFixtureDesc('sequential', '1.1').add_children(
+                    XBlockFixtureDesc('vertical', '1.1.1'),
+                    XBlockFixtureDesc('vertical', '1.1.2')
+                ),
+                XBlockFixtureDesc('sequential', '1.2').add_children(
+                    XBlockFixtureDesc('vertical', '1.2.1'),
+                    XBlockFixtureDesc('vertical', '1.2.2')
+                )
+            )
+        )
+
+    def drag_and_verify(self, source, target, expected_ordering, outline_page=None):
+        self.do_action_and_verify(
+            outline_page,
+            lambda (outline): drag(outline, source, target),
+            expected_ordering
+        )
+
+    def test_drop_unit_in_collapsed_subsection(self):
+        """
+        Drag vertical "1.1.2" from subsection "1.1" into collapsed subsection "1.2" which already
+        have its own verticals.
+        """
+        course_outline_page = self.course_outline_page.visit()
+        # expand first subsection
+        course_outline_page.q(css='.outline-item.outline-subsection.is-collapsed .ui-toggle-expansion').first.click()
+
+        expected_ordering = [{"1": ["1.1", "1.2"]},
+                             {"1.1": ["1.1.1"]},
+                             {"1.2": ["1.1.2", "1.2.1", "1.2.2"]}]
+        self.drag_and_verify(self.seq_1_vert_2_handle, self.chap_1_seq_2_handle, expected_ordering, course_outline_page)
+
+
 class WarningMessagesTest(CourseOutlineTest):
     """
     Feature: Warning messages on sections, subsections, and units
@@ -258,7 +325,6 @@ class WarningMessagesTest(CourseOutlineTest):
             unit.toggle_staff_lock()
 
 
-@attr('shard_2')
 class EditingSectionsTest(CourseOutlineTest):
     """
     Feature: Editing Release date, Due date and grading type.
@@ -406,7 +472,6 @@ class EditingSectionsTest(CourseOutlineTest):
         self.assertIn(release_text, self.course_outline_page.section_at(0).subsection_at(0).release_date)
 
 
-@attr('shard_2')
 class StaffLockTest(CourseOutlineTest):
     """
     Feature: Sections, subsections, and units can be locked and unlocked from the course outline.
@@ -788,7 +853,6 @@ class StaffLockTest(CourseOutlineTest):
         self._remove_staff_lock_and_verify_warning(subsection, False)
 
 
-@attr('shard_2')
 class EditNamesTest(CourseOutlineTest):
     """
     Feature: Click-to-edit section/subsection names
@@ -904,7 +968,6 @@ class EditNamesTest(CourseOutlineTest):
         self.assertTrue(self.course_outline_page.section_at(0).is_collapsed)
 
 
-@attr('shard_2')
 class CreateSectionsTest(CourseOutlineTest):
     """
     Feature: Create new sections/subsections/units
@@ -978,7 +1041,6 @@ class CreateSectionsTest(CourseOutlineTest):
         self.assertTrue(unit_page.is_inline_editing_display_name())
 
 
-@attr('shard_2')
 class DeleteContentTest(CourseOutlineTest):
     """
     Feature: Deleting sections/subsections/units
@@ -1090,7 +1152,6 @@ class DeleteContentTest(CourseOutlineTest):
         self.assertTrue(self.course_outline_page.has_no_content_message)
 
 
-@attr('shard_2')
 class ExpandCollapseMultipleSectionsTest(CourseOutlineTest):
     """
     Feature: Courses with multiple sections can expand and collapse all sections.
@@ -1222,7 +1283,6 @@ class ExpandCollapseMultipleSectionsTest(CourseOutlineTest):
         self.verify_all_sections(collapsed=False)
 
 
-@attr('shard_2')
 class ExpandCollapseSingleSectionTest(CourseOutlineTest):
     """
     Feature: Courses with a single section can expand and collapse all sections.
@@ -1262,7 +1322,6 @@ class ExpandCollapseSingleSectionTest(CourseOutlineTest):
         self.assertFalse(self.course_outline_page.section_at(0).subsection_at(1).is_collapsed)
 
 
-@attr('shard_2')
 class ExpandCollapseEmptyTest(CourseOutlineTest):
     """
     Feature: Courses with no sections initially can expand and collapse all sections after addition.
@@ -1300,7 +1359,6 @@ class ExpandCollapseEmptyTest(CourseOutlineTest):
         self.assertFalse(self.course_outline_page.section_at(0).is_collapsed)
 
 
-@attr('shard_2')
 class DefaultStatesEmptyTest(CourseOutlineTest):
     """
     Feature: Misc course outline default states/actions when starting with an empty course
@@ -1325,7 +1383,6 @@ class DefaultStatesEmptyTest(CourseOutlineTest):
         self.assertTrue(self.course_outline_page.bottom_add_section_button.is_present())
 
 
-@attr('shard_2')
 class DefaultStatesContentTest(CourseOutlineTest):
     """
     Feature: Misc course outline default states/actions when starting with a course with content
@@ -1350,7 +1407,6 @@ class DefaultStatesContentTest(CourseOutlineTest):
         self.assertEqual(courseware.xblock_component_type(2), 'discussion')
 
 
-@attr('shard_2')
 class UnitNavigationTest(CourseOutlineTest):
     """
     Feature: Navigate to units
@@ -1369,3 +1425,128 @@ class UnitNavigationTest(CourseOutlineTest):
         self.course_outline_page.section_at(0).subsection_at(0).toggle_expand()
         unit = self.course_outline_page.section_at(0).subsection_at(0).unit_at(0).go_to()
         self.assertTrue(unit.is_browser_on_page)
+
+
+class PublishSectionTest(CourseOutlineTest):
+    """
+    Feature: Publish sections.
+    """
+
+    __test__ = True
+
+    def populate_course_fixture(self, course_fixture):
+        """
+        Sets up a course structure with 2 subsections inside a single section.
+        The first subsection has 2 units, and the second subsection has one unit.
+        """
+        self.courseware = CoursewarePage(self.browser, self.course_id)
+        self.course_nav = CourseNavPage(self.browser)
+        course_fixture.add_children(
+            XBlockFixtureDesc('chapter', SECTION_NAME).add_children(
+                XBlockFixtureDesc('sequential', SUBSECTION_NAME).add_children(
+                    XBlockFixtureDesc('vertical', UNIT_NAME),
+                    XBlockFixtureDesc('vertical', 'Test Unit 2'),
+                ),
+                XBlockFixtureDesc('sequential', 'Test Subsection 2').add_children(
+                    XBlockFixtureDesc('vertical', 'Test Unit 3'),
+                ),
+            ),
+        )
+
+    def test_unit_publishing(self):
+        """
+        Scenario: Can publish a unit and see published content in LMS
+            Given I have a section with 2 subsections and 3 unpublished units
+            When I go to the course outline
+            Then I see publish button for the first unit, subsection, section
+            When I publish the first unit
+            Then I see that publish button for the first unit disappears
+            And I see publish buttons for subsection, section
+            And I see the changed content in LMS
+        """
+        self._add_unpublished_content()
+        self.course_outline_page.visit()
+        section, subsection, unit = self._get_items()
+        self.assertTrue(unit.publish_action)
+        self.assertTrue(subsection.publish_action)
+        self.assertTrue(section.publish_action)
+        unit.publish()
+        self.assertFalse(unit.publish_action)
+        self.assertTrue(subsection.publish_action)
+        self.assertTrue(section.publish_action)
+        self.courseware.visit()
+        self.assertEqual(1, self.courseware.num_xblock_components)
+
+    def test_subsection_publishing(self):
+        """
+        Scenario: Can publish a subsection and see published content in LMS
+            Given I have a section with 2 subsections and 3 unpublished units
+            When I go to the course outline
+            Then I see publish button for the unit, subsection, section
+            When I publish the first subsection
+            Then I see that publish button for the first subsection disappears
+            And I see that publish buttons disappear for the child units of the subsection
+            And I see publish button for section
+            And I see the changed content in LMS
+        """
+        self._add_unpublished_content()
+        self.course_outline_page.visit()
+        section, subsection, unit = self._get_items()
+        self.assertTrue(unit.publish_action)
+        self.assertTrue(subsection.publish_action)
+        self.assertTrue(section.publish_action)
+        self.course_outline_page.section(SECTION_NAME).subsection(SUBSECTION_NAME).publish()
+        self.assertFalse(unit.publish_action)
+        self.assertFalse(subsection.publish_action)
+        self.assertTrue(section.publish_action)
+        self.courseware.visit()
+        self.assertEqual(1, self.courseware.num_xblock_components)
+        self.course_nav.go_to_sequential_position(2)
+        self.assertEqual(1, self.courseware.num_xblock_components)
+
+    def test_section_publishing(self):
+        """
+        Scenario: Can publish a section and see published content in LMS
+            Given I have a section with 2 subsections and 3 unpublished units
+            When I go to the course outline
+            Then I see publish button for the unit, subsection, section
+            When I publish the section
+            Then I see that publish buttons disappears
+            And I see the changed content in LMS
+        """
+        self._add_unpublished_content()
+        self.course_outline_page.visit()
+        section, subsection, unit = self._get_items()
+        self.assertTrue(subsection.publish_action)
+        self.assertTrue(section.publish_action)
+        self.assertTrue(unit.publish_action)
+        self.course_outline_page.section(SECTION_NAME).publish()
+        self.assertFalse(subsection.publish_action)
+        self.assertFalse(section.publish_action)
+        self.assertFalse(unit.publish_action)
+        self.courseware.visit()
+        self.assertEqual(1, self.courseware.num_xblock_components)
+        self.course_nav.go_to_sequential_position(2)
+        self.assertEqual(1, self.courseware.num_xblock_components)
+        self.course_nav.go_to_section(SECTION_NAME, 'Test Subsection 2')
+        self.assertEqual(1, self.courseware.num_xblock_components)
+
+    def _add_unpublished_content(self):
+        """
+        Adds unpublished HTML content to first three units in the course.
+        """
+        for index in xrange(3):
+            self.course_fixture.create_xblock(
+                self.course_fixture.get_nested_xblocks(category="vertical")[index].locator,
+                XBlockFixtureDesc('html', 'Unpublished HTML Component ' + str(index)),
+            )
+
+    def _get_items(self):
+        """
+        Returns first section, subsection, and unit on the page.
+        """
+        section = self.course_outline_page.section(SECTION_NAME)
+        subsection = section.subsection(SUBSECTION_NAME)
+        unit = subsection.toggle_expand().unit(UNIT_NAME)
+
+        return (section, subsection, unit)

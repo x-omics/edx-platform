@@ -25,7 +25,7 @@
 
     .title {
       @extend %t-title5;
-      @extend %t-strong;
+      @extend %t-demi-strong;
       margin: ($baseline/4) ($baseline/2) ($baseline/2) ($baseline/2);
       color: $black;
     }
@@ -234,8 +234,11 @@
     }
   }
 
-  // edit outline item settings
-  .edit-outline-item-modal {
+  // outline: edit item settings
+  .wrapper-modal-window-bulkpublish-section,
+  .wrapper-modal-window-bulkpublish-subsection,
+  .wrapper-modal-window-bulkpublish-unit,
+  .course-outline-modal {
 
     .list-fields {
 

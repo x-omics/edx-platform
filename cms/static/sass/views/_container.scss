@@ -150,6 +150,10 @@
         .user {
           @extend %t-strong;
         }
+
+        .user {
+          @extend %cont-text-wrap;
+        }
       }
 
       .wrapper-release {
@@ -225,6 +229,10 @@
         .user {
           @extend %t-strong;
         }
+
+        .user {
+          @extend %cont-text-wrap;
+        }
       }
     }
 
@@ -236,8 +244,10 @@
       .wrapper-unit-id {
 
         .unit-id-value {
+          @extend %cont-text-wrap;
           @extend %t-copy-sub1;
           display: inline-block;
+          width: 100%;
         }
 
         .tip {
@@ -249,29 +259,9 @@
       }
 
       .wrapper-unit-tree-location {
-        // tree location-specific styles should go here
 
-        .outline-section{
-          box-shadow: none;
-          border: 0;
-          padding: 0;
-        }
-
-        .outline-subsection {
-          border-left: 1px solid $gray-l4;
-          padding: ($baseline/2);
-
-          .subsection-header {
-            margin-bottom: ($baseline/2);
-          }
-        }
-
-        .item-title a {
-            color: $color-heading-base;
-
-          &:hover {
-            color: $blue;
-          }
+        .item-title {
+          @extend %cont-text-wrap;
         }
       }
     }

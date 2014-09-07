@@ -1,33 +1,32 @@
-import pymongo
-from uuid import uuid4
+import datetime
 import ddt
 import itertools
-from importlib import import_module
-from collections import namedtuple
+import pymongo
 import unittest
-import datetime
+
+from collections import namedtuple
+from importlib import import_module
 from pytz import UTC
-
-from xmodule.tests import DATA_DIR
-from xmodule.modulestore import ModuleStoreEnum, PublishState
-from xmodule.modulestore.exceptions import ItemNotFoundError
-from xmodule.exceptions import InvalidVersionError
-
-from opaque_keys.edx.locations import SlashSeparatedCourseKey
-from opaque_keys.edx.locator import BlockUsageLocator, CourseLocator
+from uuid import uuid4
 
 # Mixed modulestore depends on django, so we'll manually configure some django settings
 # before importing the module
 # TODO remove this import and the configuration -- xmodule should not depend on django!
 from django.conf import settings
-from xmodule.modulestore.tests.factories import check_mongo_calls
-from xmodule.modulestore.search import path_to_location
-from xmodule.modulestore.exceptions import DuplicateCourseError
 if not settings.configured:
     settings.configure()
-from xmodule.modulestore.mixed import MixedModuleStore
+
+from opaque_keys.edx.locations import SlashSeparatedCourseKey
+from opaque_keys.edx.locator import BlockUsageLocator, CourseLocator
+from xmodule.exceptions import InvalidVersionError
+from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.draft_and_published import UnsupportedRevisionError
+from xmodule.modulestore.exceptions import ItemNotFoundError, DuplicateCourseError, ReferentialIntegrityError, NoPathToItem
+from xmodule.modulestore.mixed import MixedModuleStore
+from xmodule.modulestore.search import path_to_location
+from xmodule.modulestore.tests.factories import check_mongo_calls
 from xmodule.modulestore.tests.mongo_connection import MONGO_PORT_NUM, MONGO_HOST
+from xmodule.tests import DATA_DIR
 
 
 @ddt.ddt
@@ -126,15 +125,16 @@ class TestMixedModuleStore(unittest.TestCase):
         Create a course w/ one item in the persistence store using the given course & item location.
         """
         # create course
-        self.course = self.store.create_course(course_key.org, course_key.course, course_key.run, self.user_id)
-        if isinstance(self.course.id, CourseLocator):
-            self.course_locations[self.MONGO_COURSEID] = self.course.location
-        else:
-            self.assertEqual(self.course.id, course_key)
+        with self.store.bulk_operations(course_key):
+            self.course = self.store.create_course(course_key.org, course_key.course, course_key.run, self.user_id)
+            if isinstance(self.course.id, CourseLocator):
+                self.course_locations[self.MONGO_COURSEID] = self.course.location
+            else:
+                self.assertEqual(self.course.id, course_key)
 
-        # create chapter
-        chapter = self.store.create_child(self.user_id, self.course.location, 'chapter', block_id='Overview')
-        self.writable_chapter_location = chapter.location
+            # create chapter
+            chapter = self.store.create_child(self.user_id, self.course.location, 'chapter', block_id='Overview')
+            self.writable_chapter_location = chapter.location
 
     def _create_block_hierarchy(self):
         """
@@ -187,8 +187,9 @@ class TestMixedModuleStore(unittest.TestCase):
                 create_sub_tree(block, tree)
             setattr(self, block_info.field_name, block.location)
 
-        for tree in trees:
-            create_sub_tree(self.course, tree)
+        with self.store.bulk_operations(self.course.id):
+            for tree in trees:
+                create_sub_tree(self.course, tree)
 
     def _course_key_from_string(self, string):
         """
@@ -269,8 +270,13 @@ class TestMixedModuleStore(unittest.TestCase):
             with self.assertRaises(DuplicateCourseError):
                 self.store.create_course('org_x', 'course_y', 'run_z', self.user_id)
 
+    # Draft:
+    #    - One lookup to locate an item that exists
+    #    - Two lookups to determine an item doesn't exist (one to check mongo, one to check split)
     # split has one lookup for the course and then one for the course items
-    @ddt.data(('draft', 1, 0), ('split', 2, 0))
+    # TODO: LMS-11220: Document why draft find count is [1, 1]
+    # TODO: LMS-11220: Document why split find count is [2, 2]
+    @ddt.data(('draft', [1, 1], 0), ('split', [2, 2], 0))
     @ddt.unpack
     def test_has_item(self, default_ms, max_find, max_send):
         self.initdb(default_ms)
@@ -278,15 +284,14 @@ class TestMixedModuleStore(unittest.TestCase):
 
         self.assertTrue(self.store.has_item(self.course_locations[self.XML_COURSEID1]))
 
-        mongo_store = self.store._get_modulestore_for_courseid(self._course_key_from_string(self.MONGO_COURSEID))
-        with check_mongo_calls(mongo_store, max_find, max_send):
+        with check_mongo_calls(max_find.pop(0), max_send):
             self.assertTrue(self.store.has_item(self.problem_x1a_1))
 
         # try negative cases
         self.assertFalse(self.store.has_item(
             self.course_locations[self.XML_COURSEID1].replace(name='not_findable', category='problem')
         ))
-        with check_mongo_calls(mongo_store, max_find, max_send):
+        with check_mongo_calls(max_find.pop(0), max_send):
             self.assertFalse(self.store.has_item(self.fake_location))
 
         # verify that an error is raised when the revision is not valid
@@ -295,7 +300,9 @@ class TestMixedModuleStore(unittest.TestCase):
 
     # draft is 2 to compute inheritance
     # split is 2 (would be 3 on course b/c it looks up the wiki_slug in definitions)
-    @ddt.data(('draft', 2, 0), ('split', 2, 0))
+    # TODO: LMS-11220: Document why draft find count is [2, 2]
+    # TODO: LMS-11220: Document why split find count is [3, 3]
+    @ddt.data(('draft', [2, 2], 0), ('split', [3, 3], 0))
     @ddt.unpack
     def test_get_item(self, default_ms, max_find, max_send):
         self.initdb(default_ms)
@@ -303,8 +310,7 @@ class TestMixedModuleStore(unittest.TestCase):
 
         self.assertIsNotNone(self.store.get_item(self.course_locations[self.XML_COURSEID1]))
 
-        mongo_store = self.store._get_modulestore_for_courseid(self._course_key_from_string(self.MONGO_COURSEID))
-        with check_mongo_calls(mongo_store, max_find, max_send):
+        with check_mongo_calls(max_find.pop(0), max_send):
             self.assertIsNotNone(self.store.get_item(self.problem_x1a_1))
 
         # try negative cases
@@ -312,7 +318,7 @@ class TestMixedModuleStore(unittest.TestCase):
             self.store.get_item(
                 self.course_locations[self.XML_COURSEID1].replace(name='not_findable', category='problem')
             )
-        with check_mongo_calls(mongo_store, max_find, max_send):
+        with check_mongo_calls(max_find.pop(0), max_send):
             with self.assertRaises(ItemNotFoundError):
                 self.store.get_item(self.fake_location)
 
@@ -321,7 +327,8 @@ class TestMixedModuleStore(unittest.TestCase):
             self.store.get_item(self.fake_location, revision=ModuleStoreEnum.RevisionOption.draft_preferred)
 
     # compared to get_item for the course, draft asks for both draft and published
-    @ddt.data(('draft', 8, 0), ('split', 2, 0))
+    # TODO: LMS-11220: Document why split find count is 3
+    @ddt.data(('draft', 8, 0), ('split', 3, 0))
     @ddt.unpack
     def test_get_items(self, default_ms, max_find, max_send):
         self.initdb(default_ms)
@@ -333,9 +340,8 @@ class TestMixedModuleStore(unittest.TestCase):
         self.assertEqual(len(modules), 1)
         self.assertEqual(modules[0].location, course_locn)
 
-        mongo_store = self.store._get_modulestore_for_courseid(self._course_key_from_string(self.MONGO_COURSEID))
         course_locn = self.course_locations[self.MONGO_COURSEID]
-        with check_mongo_calls(mongo_store, max_find, max_send):
+        with check_mongo_calls(max_find, max_send):
             # NOTE: use get_course if you just want the course. get_items is expensive
             modules = self.store.get_items(course_locn.course_key, qualifiers={'category': 'problem'})
         self.assertEqual(len(modules), 6)
@@ -351,7 +357,7 @@ class TestMixedModuleStore(unittest.TestCase):
     # split: 3 to get the course structure & the course definition (show_calculator is scope content)
     #  before the change. 1 during change to refetch the definition. 3 afterward (b/c it calls get_item to return the "new" object).
     #  2 sends to update index & structure (calculator is a setting field)
-    @ddt.data(('draft', 7, 5), ('split', 6, 2))
+    @ddt.data(('draft', 11, 5), ('split', 3, 2))
     @ddt.unpack
     def test_update_item(self, default_ms, max_find, max_send):
         """
@@ -367,12 +373,11 @@ class TestMixedModuleStore(unittest.TestCase):
             self.store.update_item(course, self.user_id)
 
         # now do it for a r/w db
-        mongo_store = self.store._get_modulestore_for_courseid(self._course_key_from_string(self.MONGO_COURSEID))
         problem = self.store.get_item(self.problem_x1a_1)
         # if following raised, then the test is really a noop, change it
         self.assertNotEqual(problem.max_attempts, 2, "Default changed making test meaningless")
         problem.max_attempts = 2
-        with check_mongo_calls(mongo_store, max_find, max_send):
+        with check_mongo_calls(max_find, max_send):
             problem = self.store.update_item(problem, self.user_id)
 
         self.assertEqual(problem.max_attempts, 2, "Update didn't persist")
@@ -433,7 +438,9 @@ class TestMixedModuleStore(unittest.TestCase):
         component = self.store.publish(component.location, self.user_id)
         self.assertFalse(self.store.has_changes(component))
 
-    @ddt.data(('draft', 7, 2), ('split', 13, 4))
+    # TODO: LMS-11220: Document why split find count is 4
+    # TODO: LMS-11220: Document why split send count is 3
+    @ddt.data(('draft', 8, 2), ('split', 4, 3))
     @ddt.unpack
     def test_delete_item(self, default_ms, max_find, max_send):
         """
@@ -445,14 +452,16 @@ class TestMixedModuleStore(unittest.TestCase):
         with self.assertRaises(NotImplementedError):
             self.store.delete_item(self.xml_chapter_location, self.user_id)
 
-        mongo_store = self.store._get_modulestore_for_courseid(self._course_key_from_string(self.MONGO_COURSEID))
-        with check_mongo_calls(mongo_store, max_find, max_send):
+        with check_mongo_calls(max_find, max_send):
             self.store.delete_item(self.writable_chapter_location, self.user_id)
+
         # verify it's gone
         with self.assertRaises(ItemNotFoundError):
             self.store.get_item(self.writable_chapter_location)
 
-    @ddt.data(('draft', 8, 2), ('split', 13, 4))
+    # TODO: LMS-11220: Document why split find count is 4
+    # TODO: LMS-11220: Document why split send count is 3
+    @ddt.data(('draft', 9, 2), ('split', 4, 3))
     @ddt.unpack
     def test_delete_private_vertical(self, default_ms, max_find, max_send):
         """
@@ -483,8 +492,7 @@ class TestMixedModuleStore(unittest.TestCase):
         self.assertIn(vert_loc, course.children)
 
         # delete the vertical and ensure the course no longer points to it
-        mongo_store = self.store._get_modulestore_for_courseid(self._course_key_from_string(self.MONGO_COURSEID))
-        with check_mongo_calls(mongo_store, max_find, max_send):
+        with check_mongo_calls(max_find, max_send):
             self.store.delete_item(vert_loc, self.user_id)
         course = self.store.get_course(self.course_locations[self.MONGO_COURSEID].course_key, 0)
         if hasattr(private_vert.location, 'version_guid'):
@@ -498,7 +506,8 @@ class TestMixedModuleStore(unittest.TestCase):
         self.assertFalse(self.store.has_item(leaf_loc))
         self.assertNotIn(vert_loc, course.children)
 
-    @ddt.data(('draft', 4, 1), ('split', 5, 2))
+    # TODO: LMS-11220: Document why split find count is 2
+    @ddt.data(('draft', 5, 1), ('split', 2, 2))
     @ddt.unpack
     def test_delete_draft_vertical(self, default_ms, max_find, max_send):
         """
@@ -527,24 +536,24 @@ class TestMixedModuleStore(unittest.TestCase):
         self.store.publish(private_vert.location, self.user_id)
         private_leaf.display_name = 'change me'
         private_leaf = self.store.update_item(private_leaf, self.user_id)
-        mongo_store = self.store._get_modulestore_for_courseid(self._course_key_from_string(self.MONGO_COURSEID))
         # test succeeds if delete succeeds w/o error
-        with check_mongo_calls(mongo_store, max_find, max_send):
+        with check_mongo_calls(max_find, max_send):
             self.store.delete_item(private_leaf.location, self.user_id)
 
-    @ddt.data(('draft', 2, 0), ('split', 3, 0))
+    # TODO: LMS-11220: Document why split find count is 5
+    # TODO: LMS-11220: Document why draft find count is 4
+    @ddt.data(('draft', 4, 0), ('split', 5, 0))
     @ddt.unpack
     def test_get_courses(self, default_ms, max_find, max_send):
         self.initdb(default_ms)
         # we should have 3 total courses across all stores
-        mongo_store = self.store._get_modulestore_for_courseid(self._course_key_from_string(self.MONGO_COURSEID))
-        with check_mongo_calls(mongo_store, max_find, max_send):
+        with check_mongo_calls(max_find, max_send):
             courses = self.store.get_courses()
-        course_ids = [course.location for course in courses]
-        self.assertEqual(len(courses), 3, "Not 3 courses: {}".format(course_ids))
-        self.assertIn(self.course_locations[self.MONGO_COURSEID], course_ids)
-        self.assertIn(self.course_locations[self.XML_COURSEID1], course_ids)
-        self.assertIn(self.course_locations[self.XML_COURSEID2], course_ids)
+            course_ids = [course.location for course in courses]
+            self.assertEqual(len(courses), 3, "Not 3 courses: {}".format(course_ids))
+            self.assertIn(self.course_locations[self.MONGO_COURSEID], course_ids)
+            self.assertIn(self.course_locations[self.XML_COURSEID1], course_ids)
+            self.assertIn(self.course_locations[self.XML_COURSEID2], course_ids)
 
         with self.store.branch_setting(ModuleStoreEnum.Branch.draft_preferred):
             draft_courses = self.store.get_courses(remove_branch=True)
@@ -578,8 +587,9 @@ class TestMixedModuleStore(unittest.TestCase):
             xml_store.create_course("org", "course", "run", self.user_id)
 
     # draft is 2 to compute inheritance
-    # split is 3 b/c it gets the definition to check whether wiki is set
-    @ddt.data(('draft', 2, 0), ('split', 3, 0))
+    # split is 3 (one for the index, one for the definition to check if the wiki is set, and one for the course structure
+    # TODO: LMS-11220: Document why split find count is 4
+    @ddt.data(('draft', 2, 0), ('split', 4, 0))
     @ddt.unpack
     def test_get_course(self, default_ms, max_find, max_send):
         """
@@ -587,8 +597,7 @@ class TestMixedModuleStore(unittest.TestCase):
         of getting an item whose scope.content fields are looked at.
         """
         self.initdb(default_ms)
-        mongo_store = self.store._get_modulestore_for_courseid(self._course_key_from_string(self.MONGO_COURSEID))
-        with check_mongo_calls(mongo_store, max_find, max_send):
+        with check_mongo_calls(max_find, max_send):
             course = self.store.get_item(self.course_locations[self.MONGO_COURSEID])
             self.assertEqual(course.id, self.course_locations[self.MONGO_COURSEID].course_key)
 
@@ -597,7 +606,8 @@ class TestMixedModuleStore(unittest.TestCase):
 
     # notice this doesn't test getting a public item via draft_preferred which draft would have 2 hits (split
     # still only 2)
-    @ddt.data(('draft', 1, 0), ('split', 2, 0))
+    # TODO: LMS-11220: Document why draft find count is 2
+    @ddt.data(('draft', 2, 0), ('split', 2, 0))
     @ddt.unpack
     def test_get_parent_locations(self, default_ms, max_find, max_send):
         """
@@ -606,10 +616,9 @@ class TestMixedModuleStore(unittest.TestCase):
         self.initdb(default_ms)
         self._create_block_hierarchy()
 
-        mongo_store = self.store._get_modulestore_for_courseid(self._course_key_from_string(self.MONGO_COURSEID))
-        with check_mongo_calls(mongo_store, max_find, max_send):
+        with check_mongo_calls(max_find, max_send):
             parent = self.store.get_parent_location(self.problem_x1a_1)
-        self.assertEqual(parent, self.vertical_x1a)
+            self.assertEqual(parent, self.vertical_x1a)
 
         parent = self.store.get_parent_location(self.xml_chapter_location)
         self.assertEqual(parent, self.course_locations[self.XML_COURSEID1])
@@ -691,7 +700,22 @@ class TestMixedModuleStore(unittest.TestCase):
             (child_to_delete_location, None, ModuleStoreEnum.RevisionOption.published_only),
         ])
 
-    @ddt.data(('draft', [10, 3], 0), ('split', [14, 6], 0))
+    # Mongo reads:
+    #    First location:
+    #        - count problem (1)
+    #        - For each level of ancestors: (5)
+    #          - Count ancestor
+    #          - retrieve ancestor
+    #        - compute inheritable data
+    #    Second location:
+    #        - load vertical
+    #        - load inheritance data
+
+    # TODO: LMS-11220: Document why draft send count is 5
+    # TODO: LMS-11220: Document why draft find count is [19, 6]
+    # TODO: LMS-11220: Document why split find count is [2, 2]
+#     @ddt.data(('draft', [19, 6], 0), ('split', [2, 2], 0))
+    @ddt.data(('draft', [18, 5], 0), ('split', [16, 6], 0))  # FIXME, replace w/ above when bulk reenabled
     @ddt.unpack
     def test_path_to_location(self, default_ms, num_finds, num_sends):
         """
@@ -710,9 +734,8 @@ class TestMixedModuleStore(unittest.TestCase):
                  (course_key, "Chapter_x", None, None)),
             )
 
-            mongo_store = self.store._get_modulestore_for_courseid(self._course_key_from_string(self.MONGO_COURSEID))
             for location, expected in should_work:
-                with check_mongo_calls(mongo_store, num_finds.pop(0), num_sends):
+                with check_mongo_calls(num_finds.pop(0), num_sends):
                     self.assertEqual(path_to_location(self.store, location), expected)
 
         not_found = (
@@ -722,6 +745,18 @@ class TestMixedModuleStore(unittest.TestCase):
         for location in not_found:
             with self.assertRaises(ItemNotFoundError):
                 path_to_location(self.store, location)
+
+        # Orphaned items should not be found.
+        orphan = course_key.make_usage_key('chapter', 'OrphanChapter')
+        self.store.create_item(
+            self.user_id,
+            orphan.course_key,
+            orphan.block_type,
+            block_id=orphan.block_id
+        )
+
+        with self.assertRaises(NoPathToItem):
+            path_to_location(self.store, orphan)
 
     def test_xml_path_to_location(self):
         """
@@ -749,7 +784,7 @@ class TestMixedModuleStore(unittest.TestCase):
             with self.assertRaises(ItemNotFoundError):
                 path_to_location(self.store, location)
 
-    @ddt.data('draft')
+    @ddt.data('draft', 'split')
     def test_revert_to_published_root_draft(self, default_ms):
         """
         Test calling revert_to_published on draft vertical.
@@ -778,7 +813,7 @@ class TestMixedModuleStore(unittest.TestCase):
         self.assertEqual(vertical_children_num, len(published_parent.children))
         self.assertEqual(reverted_parent, published_parent)
 
-    @ddt.data('draft')
+    @ddt.data('draft', 'split')
     def test_revert_to_published_root_published(self, default_ms):
         """
         Test calling revert_to_published on a published vertical with a draft child.
@@ -798,7 +833,7 @@ class TestMixedModuleStore(unittest.TestCase):
         reverted_problem = self.store.get_item(self.problem_x1a_1)
         self.assertEqual(orig_display_name, reverted_problem.display_name)
 
-    @ddt.data('draft')
+    @ddt.data('draft', 'split')
     def test_revert_to_published_no_draft(self, default_ms):
         """
         Test calling revert_to_published on vertical with no draft content does nothing.
@@ -812,7 +847,7 @@ class TestMixedModuleStore(unittest.TestCase):
         reverted_vertical = self.store.get_item(self.vertical_x1a)
         self.assertEqual(orig_vertical, reverted_vertical)
 
-    @ddt.data('draft')
+    @ddt.data('draft', 'split')
     def test_revert_to_published_no_published(self, default_ms):
         """
         Test calling revert_to_published on vertical with no published version errors.
@@ -822,7 +857,7 @@ class TestMixedModuleStore(unittest.TestCase):
         with self.assertRaises(InvalidVersionError):
             self.store.revert_to_published(self.vertical_x1a, self.user_id)
 
-    @ddt.data('draft')
+    @ddt.data('draft', 'split')
     def test_revert_to_published_direct_only(self, default_ms):
         """
         Test calling revert_to_published on a direct-only item is a no-op.
@@ -868,10 +903,71 @@ class TestMixedModuleStore(unittest.TestCase):
                 block_id=location.block_id
             )
 
-        mongo_store = self.store._get_modulestore_for_courseid(self._course_key_from_string(self.MONGO_COURSEID))
-        with check_mongo_calls(mongo_store, max_find, max_send):
+        with check_mongo_calls(max_find, max_send):
             found_orphans = self.store.get_orphans(self.course_locations[self.MONGO_COURSEID].course_key)
+        self.assertItemsEqual(found_orphans, orphan_locations)
+
+    @ddt.data('draft')
+    def test_get_non_orphan_parents(self, default_ms):
+        """
+        Test finding non orphan parents from many possible parents.
+        """
+        self.initdb(default_ms)
+        course_id = self.course_locations[self.MONGO_COURSEID].course_key
+
+        # create parented children
+        self._create_block_hierarchy()
+        self.store.publish(self.course.location, self.user_id)
+
+        # test that problem "problem_x1a_1" has only one published parent
+        mongo_store = self.store._get_modulestore_for_courseid(course_id)
+        with self.store.branch_setting(ModuleStoreEnum.Branch.published_only, course_id):
+            parent = mongo_store.get_parent_location(self.problem_x1a_1)
+            self.assertEqual(parent, self.vertical_x1a)
+
+        # add some published orphans
+        orphan_sequential = course_id.make_usage_key('sequential', 'OrphanSequential')
+        orphan_vertical = course_id.make_usage_key('vertical', 'OrphanVertical')
+        orphan_locations = [orphan_sequential, orphan_vertical]
+        for location in orphan_locations:
+            self.store.create_item(
+                self.user_id,
+                location.course_key,
+                location.block_type,
+                block_id=location.block_id
+            )
+            self.store.publish(location, self.user_id)
+
+        found_orphans = mongo_store.get_orphans(course_id)
         self.assertEqual(set(found_orphans), set(orphan_locations))
+        self.assertEqual(len(set(found_orphans)), 2)
+
+        # add orphan vertical and sequential as another parents of problem "problem_x1a_1"
+        mongo_store.collection.update(
+            orphan_sequential.to_deprecated_son('_id.'),
+            {'$push': {'definition.children': unicode(self.problem_x1a_1)}}
+        )
+        mongo_store.collection.update(
+            orphan_vertical.to_deprecated_son('_id.'),
+            {'$push': {'definition.children': unicode(self.problem_x1a_1)}}
+        )
+        # test that "get_parent_location" method of published branch still returns the correct non-orphan parent for
+        # problem "problem_x1a_1" since the two other parents are orphans
+        with self.store.branch_setting(ModuleStoreEnum.Branch.published_only, course_id):
+            parent = mongo_store.get_parent_location(self.problem_x1a_1)
+            self.assertEqual(parent, self.vertical_x1a)
+
+        # now add valid published vertical as another parent of problem
+        mongo_store.collection.update(
+            self.sequential_x1.to_deprecated_son('_id.'),
+            {'$push': {'definition.children': unicode(self.problem_x1a_1)}}
+        )
+        # now check that "get_parent_location" method of published branch raises "ReferentialIntegrityError" for
+        # problem "problem_x1a_1" since it has now 2 valid published parents
+        with self.store.branch_setting(ModuleStoreEnum.Branch.published_only, course_id):
+            self.assertTrue(self.store.has_item(self.problem_x1a_1))
+            with self.assertRaises(ReferentialIntegrityError):
+                self.store.get_parent_location(self.problem_x1a_1)
 
     @ddt.data('draft')
     def test_create_item_from_parent_location(self, default_ms):
@@ -911,7 +1007,9 @@ class TestMixedModuleStore(unittest.TestCase):
         self.assertEqual(self.user_id, block.subtree_edited_by)
         self.assertGreater(datetime.datetime.now(UTC), block.subtree_edited_on)
 
-    @ddt.data(('draft', 1, 0), ('split', 1, 0))
+    # TODO: LMS-11220: Document why split find count is 2
+    # TODO: LMS-11220: Document why draft find count is 2
+    @ddt.data(('draft', 2, 0), ('split', 2, 0))
     @ddt.unpack
     def test_get_courses_for_wiki(self, default_ms, max_find, max_send):
         """
@@ -928,8 +1026,7 @@ class TestMixedModuleStore(unittest.TestCase):
         self.assertIn(self.course_locations[self.XML_COURSEID2].course_key, wiki_courses)
 
         # Test Mongo wiki
-        mongo_store = self.store._get_modulestore_for_courseid(self._course_key_from_string(self.MONGO_COURSEID))
-        with check_mongo_calls(mongo_store, max_find, max_send):
+        with check_mongo_calls(max_find, max_send):
             wiki_courses = self.store.get_courses_for_wiki('999')
         self.assertEqual(len(wiki_courses), 1)
         self.assertIn(
@@ -940,7 +1037,16 @@ class TestMixedModuleStore(unittest.TestCase):
         self.assertEqual(len(self.store.get_courses_for_wiki('edX.simple.2012_Fall')), 0)
         self.assertEqual(len(self.store.get_courses_for_wiki('no_such_wiki')), 0)
 
-    @ddt.data(('draft', 2, 6), ('split', 7, 2))
+    # Mongo reads:
+    #    - load vertical
+    #    - load vertical children
+    #    - get last error
+    # Split takes 1 query to read the course structure, deletes all of the entries in memory, and loads the module from an in-memory cache
+    # Sends:
+    #    - insert structure
+    #    - write index entry
+    # TODO: LMS-11220: Document why split find count is 3
+    @ddt.data(('draft', 3, 6), ('split', 3, 2))
     @ddt.unpack
     def test_unpublish(self, default_ms, max_find, max_send):
         """
@@ -958,8 +1064,7 @@ class TestMixedModuleStore(unittest.TestCase):
         self.assertIsNotNone(published_xblock)
 
         # unpublish
-        mongo_store = self.store._get_modulestore_for_courseid(self._course_key_from_string(self.MONGO_COURSEID))
-        with check_mongo_calls(mongo_store, max_find, max_send):
+        with check_mongo_calls(max_find, max_send):
             self.store.unpublish(self.vertical_x1a, self.user_id)
 
         with self.assertRaises(ItemNotFoundError):
@@ -975,11 +1080,11 @@ class TestMixedModuleStore(unittest.TestCase):
         )
         self.assertIsNotNone(draft_xblock)
 
-    @ddt.data(('draft', 1, 0), ('split', 4, 0))
+    @ddt.data(('draft', 1, 0), ('split', 2, 0))
     @ddt.unpack
-    def test_compute_publish_state(self, default_ms, max_find, max_send):
+    def test_has_published_version(self, default_ms, max_find, max_send):
         """
-        Test the compute_publish_state method
+        Test the has_published_version method
         """
         self.initdb(default_ms)
         self._create_block_hierarchy()
@@ -987,39 +1092,34 @@ class TestMixedModuleStore(unittest.TestCase):
         # start off as Private
         item = self.store.create_child(self.user_id, self.writable_chapter_location, 'problem', 'test_compute_publish_state')
         item_location = item.location
-        mongo_store = self.store._get_modulestore_for_courseid(self._course_key_from_string(self.MONGO_COURSEID))
-        with check_mongo_calls(mongo_store, max_find, max_send):
-            self.assertEquals(self.store.compute_publish_state(item), PublishState.private)
+        with check_mongo_calls(max_find, max_send):
+            self.assertFalse(self.store.has_published_version(item))
 
         # Private -> Public
         self.store.publish(item_location, self.user_id)
         item = self.store.get_item(item_location)
-        self.assertEquals(self.store.compute_publish_state(item), PublishState.public)
+        self.assertTrue(self.store.has_published_version(item))
 
         # Public -> Private
         self.store.unpublish(item_location, self.user_id)
         item = self.store.get_item(item_location)
-        self.assertEquals(self.store.compute_publish_state(item), PublishState.private)
+        self.assertFalse(self.store.has_published_version(item))
 
         # Private -> Public
         self.store.publish(item_location, self.user_id)
         item = self.store.get_item(item_location)
-        self.assertEquals(self.store.compute_publish_state(item), PublishState.public)
+        self.assertTrue(self.store.has_published_version(item))
 
         # Public -> Draft with NO changes
-        # Note: This is where Split and Mongo differ
         self.store.convert_to_draft(item_location, self.user_id)
         item = self.store.get_item(item_location)
-        self.assertEquals(
-            self.store.compute_publish_state(item),
-            PublishState.draft if default_ms == 'draft' else PublishState.public
-        )
+        self.assertTrue(self.store.has_published_version(item))
 
         # Draft WITH changes
         item.display_name = 'new name'
         item = self.store.update_item(item, self.user_id)
         self.assertTrue(self.store.has_changes(item))
-        self.assertEquals(self.store.compute_publish_state(item), PublishState.draft)
+        self.assertTrue(self.store.has_published_version(item))
 
     @ddt.data('draft', 'split')
     def test_auto_publish(self, default_ms):
@@ -1034,47 +1134,47 @@ class TestMixedModuleStore(unittest.TestCase):
 
         # test create_course to make sure we are autopublishing
         test_course = self.store.create_course('testx', 'GreekHero', 'test_run', self.user_id)
-        self.assertEqual(self.store.compute_publish_state(test_course), PublishState.public)
+        self.assertTrue(self.store.has_published_version(test_course))
 
         test_course_key = test_course.id
 
         # test create_item of direct-only category to make sure we are autopublishing
         chapter = self.store.create_item(self.user_id, test_course_key, 'chapter', 'Overview')
-        self.assertEqual(self.store.compute_publish_state(chapter), PublishState.public)
+        self.assertTrue(self.store.has_published_version(chapter))
 
         chapter_location = chapter.location
 
         # test create_child of direct-only category to make sure we are autopublishing
         sequential = self.store.create_child(self.user_id, chapter_location, 'sequential', 'Sequence')
-        self.assertEqual(self.store.compute_publish_state(sequential), PublishState.public)
+        self.assertTrue(self.store.has_published_version(sequential))
 
         # test update_item of direct-only category to make sure we are autopublishing
         sequential.display_name = 'sequential1'
         sequential = self.store.update_item(sequential, self.user_id)
-        self.assertEqual(self.store.compute_publish_state(sequential), PublishState.public)
+        self.assertTrue(self.store.has_published_version(sequential))
 
         # test delete_item of direct-only category to make sure we are autopublishing
         self.store.delete_item(sequential.location, self.user_id, revision=ModuleStoreEnum.RevisionOption.all)
         chapter = self.store.get_item(chapter.location.for_branch(None))
-        self.assertEqual(self.store.compute_publish_state(chapter), PublishState.public)
+        self.assertTrue(self.store.has_published_version(chapter))
 
         # test create_child of NOT direct-only category to make sure we aren't autopublishing
         problem_child = self.store.create_child(self.user_id, chapter_location, 'problem', 'Problem_Child')
-        self.assertEqual(self.store.compute_publish_state(problem_child), PublishState.private)
+        self.assertFalse(self.store.has_published_version(problem_child))
 
         # test create_item of NOT direct-only category to make sure we aren't autopublishing
         problem_item = self.store.create_item(self.user_id, test_course_key, 'problem', 'Problem_Item')
-        self.assertEqual(self.store.compute_publish_state(problem_item), PublishState.private)
+        self.assertFalse(self.store.has_published_version(problem_item))
 
         # test update_item of NOT direct-only category to make sure we aren't autopublishing
         problem_item.display_name = 'Problem_Item1'
         problem_item = self.store.update_item(problem_item, self.user_id)
-        self.assertEqual(self.store.compute_publish_state(problem_item), PublishState.private)
+        self.assertFalse(self.store.has_published_version(problem_item))
 
         # test delete_item of NOT direct-only category to make sure we aren't autopublishing
         self.store.delete_item(problem_child.location, self.user_id)
         chapter = self.store.get_item(chapter.location.for_branch(None))
-        self.assertEqual(self.store.compute_publish_state(chapter), PublishState.public)
+        self.assertTrue(self.store.has_published_version(chapter))
 
     @ddt.data('draft', 'split')
     def test_get_courses_for_wiki_shared(self, default_ms):
@@ -1284,7 +1384,7 @@ def load_function(path):
 
 
 # pylint: disable=unused-argument
-def create_modulestore_instance(engine, contentstore, doc_store_config, options, i18n_service=None):
+def create_modulestore_instance(engine, contentstore, doc_store_config, options, i18n_service=None, fs_service=None):
     """
     This will return a new instance of a modulestore given an engine and options
     """

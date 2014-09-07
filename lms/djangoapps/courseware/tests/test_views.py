@@ -5,7 +5,7 @@ Tests courseware views.py
 import unittest
 from datetime import datetime
 
-from mock import MagicMock, patch
+from mock import MagicMock, patch, create_autospec
 from pytz import UTC
 
 from django.test import TestCase
@@ -150,6 +150,10 @@ class ViewsTestCase(TestCase):
 
     def test_invalid_course_id(self):
         response = self.client.get('/courses/MITx/3.091X/')
+        self.assertEqual(response.status_code, 404)
+
+    def test_incomplete_course_id(self):
+        response = self.client.get('/courses/MITx/')
         self.assertEqual(response.status_code, 404)
 
     def test_index_invalid_position(self):
@@ -459,7 +463,7 @@ class TestProgressDueDate(BaseDueDateTests):
         """ Returns the HTML for the progress page """
 
         mako_middleware_process_request(self.request)
-        return views.progress(self.request, course.id.to_deprecated_string(), self.user.id).content
+        return views.progress(self.request, course_id=course.id.to_deprecated_string(), student_id=self.user.id).content
 
 
 class TestAccordionDueDate(BaseDueDateTests):
@@ -556,9 +560,32 @@ class ProgressPageTests(ModuleStoreTestCase):
     def test_pure_ungraded_xblock(self):
         ItemFactory(category='acid', parent_location=self.vertical.location)
 
-        resp = views.progress(self.request, self.course.id.to_deprecated_string())
+        resp = views.progress(self.request, course_id=self.course.id.to_deprecated_string())
         self.assertEqual(resp.status_code, 200)
 
     def test_non_asci_grade_cutoffs(self):
-        resp = views.progress(self.request, self.course.id.to_deprecated_string())
+        resp = views.progress(self.request, course_id=self.course.id.to_deprecated_string())
         self.assertEqual(resp.status_code, 200)
+
+
+class TestVerifyCourseIdDecorator(TestCase):
+    """
+    Tests for the verify_course_id decorator.
+    """
+
+    def setUp(self):
+        self.request = RequestFactory().get("foo")
+        self.valid_course_id = "edX/test/1"
+        self.invalid_course_id = "edX/"
+
+    def test_decorator_with_valid_course_id(self):
+        mocked_view = create_autospec(views.course_about)
+        view_function = views.verify_course_id(mocked_view)
+        view_function(self.request, course_id=self.valid_course_id)
+        self.assertTrue(mocked_view.called)
+
+    def test_decorator_with_invalid_course_id(self):
+        mocked_view = create_autospec(views.course_about)
+        view_function = views.verify_course_id(mocked_view)
+        self.assertRaises(Http404, view_function, self.request, course_id=self.invalid_course_id)
+        self.assertFalse(mocked_view.called)

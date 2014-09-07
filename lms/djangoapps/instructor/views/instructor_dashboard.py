@@ -13,7 +13,6 @@ from django.utils.translation import ugettext as _
 from django_future.csrf import ensure_csrf_cookie
 from django.views.decorators.cache import cache_control
 from edxmako.shortcuts import render_to_response
-from django.contrib.auth.models import User
 from django.core.urlresolvers import reverse
 from django.utils.html import escape
 from django.http import Http404, HttpResponse, HttpResponseNotFound
@@ -27,7 +26,7 @@ from xmodule.modulestore.django import modulestore
 from xblock.field_data import DictFieldData
 from xblock.fields import ScopeIds
 from courseware.access import has_access
-from courseware.courses import get_course_by_id, get_cms_course_link, get_course_with_access
+from courseware.courses import get_course_by_id, get_cms_course_link
 from django_comment_client.utils import has_forum_access
 from django_comment_common.models import FORUM_ROLE_ADMINISTRATOR
 from student.models import CourseEnrollment
@@ -35,7 +34,6 @@ from shoppingcart.models import Coupon, PaidCourseRegistration
 from course_modes.models import CourseMode, CourseModesArchive
 from student.roles import CourseFinanceAdminRole
 
-from bulk_email.models import CourseAuthorization
 from class_dashboard.dashboard_data import get_section_display_name, get_array_section_has_problem
 
 from analyticsclient.client import Client
@@ -158,15 +156,19 @@ def _section_e_commerce(course_key, access):
         'course_id': course_key.to_deprecated_string(),
         'ajax_remove_coupon_url': reverse('remove_coupon', kwargs={'course_id': course_key.to_deprecated_string()}),
         'ajax_get_coupon_info': reverse('get_coupon_info', kwargs={'course_id': course_key.to_deprecated_string()}),
+        'get_user_invoice_preference_url': reverse('get_user_invoice_preference', kwargs={'course_id': course_key.to_deprecated_string()}),
+        'sale_validation_url': reverse('sale_validation', kwargs={'course_id': course_key.to_deprecated_string()}),
         'ajax_update_coupon': reverse('update_coupon', kwargs={'course_id': course_key.to_deprecated_string()}),
         'ajax_add_coupon': reverse('add_coupon', kwargs={'course_id': course_key.to_deprecated_string()}),
         'get_purchase_transaction_url': reverse('get_purchase_transaction', kwargs={'course_id': course_key.to_deprecated_string()}),
+        'get_sale_records_url': reverse('get_sale_records', kwargs={'course_id': course_key.to_deprecated_string()}),
         'instructor_url': reverse('instructor_dashboard', kwargs={'course_id': course_key.to_deprecated_string()}),
         'get_registration_code_csv_url': reverse('get_registration_codes', kwargs={'course_id': course_key.to_deprecated_string()}),
         'generate_registration_code_csv_url': reverse('generate_registration_codes', kwargs={'course_id': course_key.to_deprecated_string()}),
         'active_registration_code_csv_url': reverse('active_registration_codes', kwargs={'course_id': course_key.to_deprecated_string()}),
         'spent_registration_code_csv_url': reverse('spent_registration_codes', kwargs={'course_id': course_key.to_deprecated_string()}),
         'set_course_mode_url': reverse('set_course_mode_price', kwargs={'course_id': course_key.to_deprecated_string()}),
+        'download_coupon_codes_url': reverse('get_coupon_codes', kwargs={'course_id': course_key.to_deprecated_string()}),
         'coupons': coupons,
         'total_amount': total_amount,
         'course_price': course_price

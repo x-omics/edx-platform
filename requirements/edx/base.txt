@@ -10,6 +10,7 @@ bleach==1.4
 html5lib==0.999
 boto==2.13.3
 celery==3.0.19
+cssselect==0.9.1
 dealer==0.2.3
 distribute>=0.6.28, <0.7
 django-babel-underscore==0.1.0
@@ -123,7 +124,7 @@ pep8==1.4.5
 pylint==0.28
 python-subunit==0.0.16
 rednose==0.3
-selenium==2.39.0
+selenium==2.42.1
 splinter==0.5.4
 testtools==0.9.34
 
@@ -136,4 +137,6 @@ git+https://github.com/mfogel/django-settings-context-processor.git
 git+https://github.com/mitocw/django-cas.git
 
 # edX packages
-edx-submissions==0.0.6
+edx-submissions==0.0.7
+
+-e git+https://github.com/pmitros/django-pyfs.git@514607d78535fd80bfd23184cd292ee5799b500d#egg=djpyfs

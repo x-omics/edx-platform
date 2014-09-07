@@ -6,9 +6,7 @@ from bok_choy.page_object import PageObject
 from bok_choy.promise import Promise, EmptyPromise
 from . import BASE_URL
 
-from selenium.webdriver.common.action_chains import ActionChains
-
-from utils import click_css, wait_for_notification, confirm_prompt
+from utils import click_css, confirm_prompt
 
 
 class ContainerPage(PageObject):
@@ -37,14 +35,28 @@ class ContainerPage(PageObject):
             return None
 
     def is_browser_on_page(self):
+        def _xblock_count(class_name, request_token):
+            return len(self.q(css='{body_selector} .xblock.{class_name}[data-request-token="{request_token}"]'.format(
+                body_selector=XBlockWrapper.BODY_SELECTOR, class_name=class_name, request_token=request_token
+            )).results)
 
         def _is_finished_loading():
-            # Wait until all components have been loaded.
-            # See common/static/coffee/src/xblock/core.coffee which adds the
-            # class "xblock-initialized" at the end of initializeBlock
-            num_wrappers = len(self.q(css=XBlockWrapper.BODY_SELECTOR).results)
-            num_xblocks_init = len(self.q(css='{} .xblock.xblock-initialized'.format(XBlockWrapper.BODY_SELECTOR)).results)
-            is_done = num_wrappers == num_xblocks_init
+            is_done = False
+            # Get the request token of the first xblock rendered on the page and assume it is correct.
+            data_request_elements = self.q(css='[data-request-token]')
+            if len(data_request_elements) > 0:
+                request_token = data_request_elements.first.attrs('data-request-token')[0]
+                # Then find the number of Studio xblock wrappers on the page with that request token.
+                num_wrappers = len(self.q(css='{} [data-request-token="{}"]'.format(XBlockWrapper.BODY_SELECTOR, request_token)).results)
+                # Wait until all components have been loaded and marked as either initialized or failed.
+                # See:
+                #   - common/static/coffee/src/xblock/core.coffee which adds the class "xblock-initialized"
+                #     at the end of initializeBlock.
+                #   - common/static/js/views/xblock.js which adds the class "xblock-initialization-failed"
+                #     if the xblock threw an error while initializing.
+                num_initialized_xblocks = _xblock_count('xblock-initialized', request_token)
+                num_failed_xblocks = _xblock_count('xblock-initialization-failed', request_token)
+                is_done = num_wrappers == (num_initialized_xblocks + num_failed_xblocks)
             return (is_done, is_done)
 
         # First make sure that an element with the view-container class is present on the page,
@@ -206,26 +218,6 @@ class ContainerPage(PageObject):
         return self.q(css=prefix + XBlockWrapper.BODY_SELECTOR).map(
             lambda el: XBlockWrapper(self.browser, el.get_attribute('data-locator'))).results
 
-    def drag(self, source_index, target_index):
-        """
-        Gets the drag handle with index source_index (relative to the vertical layout of the page)
-        and drags it to the location of the drag handle with target_index.
-
-        This should drag the element with the source_index drag handle BEFORE the
-        one with the target_index drag handle.
-        """
-        draggables = self.q(css='.drag-handle')
-        source = draggables[source_index]
-        target = draggables[target_index]
-        action = ActionChains(self.browser)
-        # When dragging before the target element, must take into account that the placeholder
-        # will appear in the place where the target used to be.
-        placeholder_height = 40
-        action.click_and_hold(source).move_to_element_with_offset(
-            target, 0, placeholder_height
-        ).release().perform()
-        wait_for_notification(self)
-
     def duplicate(self, source_index):
         """
         Duplicate the item with index source_index (based on vertical placement in page).
@@ -284,6 +276,7 @@ class XBlockWrapper(PageObject):
     BODY_SELECTOR = '.studio-xblock-wrapper'
     NAME_SELECTOR = '.xblock-display-name'
     COMPONENT_BUTTONS = {
+        'basic_tab': '.editor-tabs li.inner_tab_wrap:nth-child(1) > a',
         'advanced_tab': '.editor-tabs li.inner_tab_wrap:nth-child(2) > a',
         'save_settings': '.action-save',
     }
@@ -358,6 +351,12 @@ class XBlockWrapper(PageObject):
         Click on Advanced Tab.
         """
         self._click_button('advanced_tab')
+
+    def open_basic_tab(self):
+        """
+        Click on Basic Tab.
+        """
+        self._click_button('basic_tab')
 
     def save_settings(self):
         """

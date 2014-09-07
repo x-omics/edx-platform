@@ -17,6 +17,7 @@ import sys
 import logging
 import copy
 import re
+import threading
 from uuid import uuid4
 
 from bson.son import SON
@@ -37,7 +38,7 @@ from xmodule.modulestore import ModuleStoreWriteBase, ModuleStoreEnum
 from xmodule.modulestore.draft_and_published import ModuleStoreDraftAndPublished, DIRECT_ONLY_CATEGORIES
 from opaque_keys.edx.locations import Location
 from xmodule.modulestore.exceptions import ItemNotFoundError, DuplicateCourseError, ReferentialIntegrityError
-from xmodule.modulestore.inheritance import own_metadata, InheritanceMixin, inherit_metadata, InheritanceKeyValueStore
+from xmodule.modulestore.inheritance import InheritanceMixin, inherit_metadata, InheritanceKeyValueStore
 from xblock.core import XBlock
 from opaque_keys.edx.locations import SlashSeparatedCourseKey
 from opaque_keys.edx.locator import CourseLocator
@@ -366,6 +367,7 @@ class MongoModuleStore(ModuleStoreDraftAndPublished, ModuleStoreWriteBase):
                  default_class=None,
                  error_tracker=null_error_tracker,
                  i18n_service=None,
+                 fs_service=None,
                  **kwargs):
         """
         :param doc_store_config: must have a host, db, and collection entries. Other common entries: port, tz_aware.
@@ -409,10 +411,11 @@ class MongoModuleStore(ModuleStoreDraftAndPublished, ModuleStoreWriteBase):
         self.error_tracker = error_tracker
         self.render_template = render_template
         self.i18n_service = i18n_service
+        self.fs_service = fs_service
 
         # performance optimization to prevent updating the meta-data inheritance tree during
         # bulk write operations
-        self.ignore_write_events_on_courses = set()
+        self.ignore_write_events_on_courses = threading.local()
         self._course_run_cache = {}
 
     def close_connections(self):
@@ -433,27 +436,36 @@ class MongoModuleStore(ModuleStoreDraftAndPublished, ModuleStoreWriteBase):
         connection.drop_database(self.collection.database)
         connection.close()
 
-    def _begin_bulk_write_operation(self, course_id):
+    def _begin_bulk_operation(self, course_id):
         """
         Prevent updating the meta-data inheritance cache for the given course
         """
-        self.ignore_write_events_on_courses.add(course_id)
+        if not hasattr(self.ignore_write_events_on_courses, 'courses'):
+            self.ignore_write_events_on_courses.courses = set()
 
-    def _end_bulk_write_operation(self, course_id):
+        self.ignore_write_events_on_courses.courses.add(course_id)
+
+    def _end_bulk_operation(self, course_id):
         """
         Restart updating the meta-data inheritance cache for the given course.
         Refresh the meta-data inheritance cache now since it was temporarily disabled.
         """
-        if course_id in self.ignore_write_events_on_courses:
-            self.ignore_write_events_on_courses.remove(course_id)
+        if not hasattr(self.ignore_write_events_on_courses, 'courses'):
+            return
+
+        if course_id in self.ignore_write_events_on_courses.courses:
+            self.ignore_write_events_on_courses.courses.remove(course_id)
             self.refresh_cached_metadata_inheritance_tree(course_id)
 
     def _is_bulk_write_in_progress(self, course_id):
         """
         Returns whether a bulk write operation is in progress for the given course.
         """
+        if not hasattr(self.ignore_write_events_on_courses, 'courses'):
+            return False
+
         course_id = course_id.for_branch(None)
-        return course_id in self.ignore_write_events_on_courses
+        return course_id in self.ignore_write_events_on_courses.courses
 
     def fill_in_run(self, course_key):
         """
@@ -695,6 +707,9 @@ class MongoModuleStore(ModuleStoreDraftAndPublished, ModuleStoreWriteBase):
         services = {}
         if self.i18n_service:
             services["i18n"] = self.i18n_service
+
+        if self.fs_service:
+            services["fs"] = self.fs_service
 
         system = CachingDescriptorSystem(
             modulestore=self,
@@ -989,6 +1004,9 @@ class MongoModuleStore(ModuleStoreDraftAndPublished, ModuleStoreWriteBase):
             if self.i18n_service:
                 services["i18n"] = self.i18n_service
 
+            if self.fs_service:
+                services["fs"] = self.fs_service
+
             runtime = CachingDescriptorSystem(
                 modulestore=self,
                 module_data={},
@@ -1210,6 +1228,38 @@ class MongoModuleStore(ModuleStoreDraftAndPublished, ModuleStoreWriteBase):
                     jsonfields[field_name] = field.read_json(xblock)
         return jsonfields
 
+    def _get_non_orphan_parents(self, location, parents, revision):
+        """
+        Extract non orphan parents by traversing the list of possible parents and remove current location
+        from orphan parents to avoid parents calculation overhead next time.
+        """
+        non_orphan_parents = []
+        for parent in parents:
+            parent_loc = Location._from_deprecated_son(parent['_id'], location.course_key.run)
+
+            # travel up the tree for orphan validation
+            ancestor_loc = parent_loc
+            while ancestor_loc is not None:
+                current_loc = ancestor_loc
+                ancestor_loc = self._get_raw_parent_location(current_loc, revision)
+                if ancestor_loc is None:
+                    # The parent is an orphan, so remove all the children including
+                    # the location whose parent we are looking for from orphan parent
+                    self.collection.update(
+                        {'_id': parent_loc.to_deprecated_son()},
+                        {'$set': {'definition.children': []}},
+                        multi=False,
+                        upsert=True,
+                        safe=self.collection.safe
+                    )
+                elif ancestor_loc.category == 'course':
+                    # once we reach the top location of the tree and if the location is not an orphan then the
+                    # parent is not an orphan either
+                    non_orphan_parents.append(parent_loc)
+                    break
+
+        return non_orphan_parents
+
     def _get_raw_parent_location(self, location, revision=ModuleStoreEnum.RevisionOption.published_only):
         '''
         Helper for get_parent_location that finds the location that is the parent of this location in this course,
@@ -1236,10 +1286,18 @@ class MongoModuleStore(ModuleStoreDraftAndPublished, ModuleStoreWriteBase):
 
         if revision == ModuleStoreEnum.RevisionOption.published_only:
             if parents.count() > 1:
-                # should never have multiple PUBLISHED parents
-                raise ReferentialIntegrityError(
-                    u"{} parents claim {}".format(parents.count(), location)
-                )
+                non_orphan_parents = self._get_non_orphan_parents(location, parents, revision)
+                if len(non_orphan_parents) == 0:
+                    # no actual parent found
+                    return None
+
+                if len(non_orphan_parents) > 1:
+                    # should never have multiple PUBLISHED parents
+                    raise ReferentialIntegrityError(
+                        u"{} parents claim {}".format(parents.count(), location)
+                    )
+                else:
+                    return non_orphan_parents[0]
             else:
                 # return the single PUBLISHED parent
                 return Location._from_deprecated_son(parents[0]['_id'], location.course_key.run)
@@ -1247,9 +1305,20 @@ class MongoModuleStore(ModuleStoreDraftAndPublished, ModuleStoreWriteBase):
             # there could be 2 different parents if
             #   (1) the draft item was moved or
             #   (2) the parent itself has 2 versions: DRAFT and PUBLISHED
+            #  if there are multiple parents with version PUBLISHED then choose from non-orphan parents
+            all_parents = []
+            published_parents = 0
+            for parent in parents:
+                if parent['_id']['revision'] is None:
+                    published_parents += 1
+                all_parents.append(parent)
 
             # since we sorted by SORT_REVISION_FAVOR_DRAFT, the 0'th parent is the one we want
-            found_id = parents[0]['_id']
+            if published_parents > 1:
+                non_orphan_parents = self._get_non_orphan_parents(location, all_parents, revision)
+                return non_orphan_parents[0]
+
+            found_id = all_parents[0]['_id']
             # don't disclose revision outside modulestore
             return Location._from_deprecated_son(found_id, location.course_key.run)
 
