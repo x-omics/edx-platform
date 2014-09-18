@@ -266,15 +266,10 @@ def students_update_enrollment(request, course_id):
     action = request.POST.get('action')
     identifiers_raw = request.POST.get('identifiers')
     identifiers = _split_input_list(identifiers_raw)
-<<<<<<< HEAD
     auto_enroll = request.GET.get('auto_enroll') in ['true', 'True', True]
     email_students = request.GET.get('email_students') in ['true', 'True', True]
     add_students = request.GET.get('add_students') in ['true', 'True', True]
-=======
-    auto_enroll = request.POST.get('auto_enroll') in ['true', 'True', True]
-    email_students = request.POST.get('email_students') in ['true', 'True', True]
 
->>>>>>> edx-release
     email_params = {}
     if email_students:
         course = get_course_by_id(course_id)
