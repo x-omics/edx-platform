@@ -118,7 +118,19 @@ class VideoComponentPage(VideoPage):
             self._wait_for(lambda: self.q(css=CLASS_SELECTORS['video_init']).present, 'Video Player Initialized')
             self._wait_for(lambda: not self.q(css=CLASS_SELECTORS['video_spinner']).visible,
                            'Video Buffering Completed')
-            self._wait_for(lambda: self.q(css=CLASS_SELECTORS['video_controls']).visible, 'Player Controls are Visible')
+            self._wait_for(self.is_controls_visible, 'Player Controls are Visible')
+
+    @wait_for_js
+    def is_controls_visible(self):
+        """
+        Get current visibility sate of all video controls.
+
+        Returns:
+            bool: True means video controls are visible for all videos, False means video controls are not visible
+            for one or more videos
+
+        """
+        return self.q(css=CLASS_SELECTORS['video_controls']).visible
 
     def click_button(self, button_name, index=0):
         """
@@ -517,10 +529,11 @@ class VideoComponentPage(VideoPage):
             str: status/error message
 
         """
-        if self.q(css=CLASS_SELECTORS[message_type]).visible:
-            return self.q(css=CLASS_SELECTORS[message_type]).text[0]
-        else:
-            return ''
+        if message_type == 'status':
+            self.wait_for_element_visibility(CLASS_SELECTORS[message_type],
+                                             '{} message is Visible'.format(message_type.title()))
+
+        return self.q(css=CLASS_SELECTORS[message_type]).text[0]
 
     def url_field_status(self, *field_numbers):
         """

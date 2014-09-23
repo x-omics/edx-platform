@@ -240,7 +240,7 @@ class XModuleMixin(XBlockMixin):
         name = self.display_name
         if name is None:
             name = self.url_name.replace('_', ' ')
-        return name
+        return name.replace('<', '&lt;').replace('>', '&gt;')
 
     @property
     def display_category_with_default(self):
@@ -743,7 +743,7 @@ class XModuleDescriptor(XModuleMixin, HTMLSnippet, ResourceTemplates, XBlock):
         # leaving off original_version since it complicates creation w/o any obv value yet and is computable
         # by following previous until None
         # definition_locator is only used by mongostores which separate definitions from blocks
-        self.edited_by = self.edited_on = self.previous_version = self.update_version = self.definition_locator = None
+        self.previous_version = self.update_version = self.definition_locator = None
         self.xmodule_runtime = None
 
     @classmethod

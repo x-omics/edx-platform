@@ -14,6 +14,8 @@ from django_comment_client.permissions import check_permissions_by_view, cached_
 from edxmako import lookup_template
 import pystache_custom as pystache
 
+from course_groups.cohorts import get_cohort_by_id, get_cohort_id, is_commentable_cohorted
+from course_groups.models import CourseUserGroup
 from xmodule.modulestore.django import modulestore
 from django.utils.timezone import UTC
 from opaque_keys.edx.locations import i4xEncoder
@@ -364,14 +366,23 @@ def add_courseware_context(content_list, course):
             content.update({"courseware_url": url, "courseware_title": title})
 
 
-def safe_content(content, course_id, is_staff=False):
+def prepare_content(content, course_key, is_staff=False):
+    """
+    This function is used to pre-process thread and comment models in various
+    ways before adding them to the HTTP response.  This includes fixing empty
+    attribute fields, enforcing author anonymity, and enriching metadata around
+    group ownership and response endorsement.
+
+    @TODO: not all response pre-processing steps are currently integrated into
+    this function.
+    """
     fields = [
         'id', 'title', 'body', 'course_id', 'anonymous', 'anonymous_to_peers',
         'endorsed', 'parent_id', 'thread_id', 'votes', 'closed', 'created_at',
         'updated_at', 'depth', 'type', 'commentable_id', 'comments_count',
         'at_position_list', 'children', 'highlighted_title', 'highlighted_body',
         'courseware_title', 'courseware_url', 'unread_comments_count',
-        'read', 'group_id', 'group_name', 'group_string', 'pinned', 'abuse_flaggers',
+        'read', 'group_id', 'group_name', 'pinned', 'abuse_flaggers',
         'stats', 'resp_skip', 'resp_limit', 'resp_total', 'thread_type',
         'endorsed_responses', 'non_endorsed_responses', 'non_endorsed_resp_total',
         'endorsement',
@@ -405,9 +416,48 @@ def safe_content(content, course_id, is_staff=False):
 
     for child_content_key in ["children", "endorsed_responses", "non_endorsed_responses"]:
         if child_content_key in content:
-            safe_children = [
-                safe_content(child, course_id, is_staff) for child in content[child_content_key]
+            children = [
+                prepare_content(child, course_key, is_staff) for child in content[child_content_key]
             ]
-            content[child_content_key] = safe_children
+            content[child_content_key] = children
+
+    # Augment the specified thread info to include the group name if a group id is present.
+    if content.get('group_id') is not None:
+        content['group_name'] = get_cohort_by_id(course_key, content.get('group_id')).name
 
     return content
+
+
+def get_group_id_for_comments_service(request, course_key, commentable_id=None):
+    """
+    Given a user requesting content within a `commentable_id`, determine the
+    group_id which should be passed to the comments service.
+
+    Returns:
+        int: the group_id to pass to the comments service or None if nothing
+        should be passed
+
+    Raises:
+        ValueError if the requested group_id is invalid
+    """
+    if commentable_id is None or is_commentable_cohorted(course_key, commentable_id):
+        if request.method == "GET":
+            requested_group_id = request.GET.get('group_id')
+        elif request.method == "POST":
+            requested_group_id = request.POST.get('group_id')
+        if cached_has_permission(request.user, "see_all_cohorts", course_key):
+            if not requested_group_id:
+                return None
+            try:
+                group_id = int(requested_group_id)
+                get_cohort_by_id(course_key, group_id)
+            except CourseUserGroup.DoesNotExist:
+                raise ValueError
+        else:
+            # regular users always query with their own id.
+            group_id = get_cohort_id(request.user, course_key)
+        return group_id
+    else:
+        # Never pass a group_id to the comments service for a non-cohorted
+        # commentable
+        return None

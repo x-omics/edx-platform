@@ -17,7 +17,6 @@ import sys
 import logging
 import copy
 import re
-import threading
 from uuid import uuid4
 
 from bson.son import SON
@@ -34,7 +33,7 @@ from xblock.runtime import KvsFieldData
 from xblock.exceptions import InvalidScopeError
 from xblock.fields import Scope, ScopeIds, Reference, ReferenceList, ReferenceValueDict
 
-from xmodule.modulestore import ModuleStoreWriteBase, ModuleStoreEnum
+from xmodule.modulestore import ModuleStoreWriteBase, ModuleStoreEnum, BulkOperationsMixin, BulkOpsRecord
 from xmodule.modulestore.draft_and_published import ModuleStoreDraftAndPublished, DIRECT_ONLY_CATEGORIES
 from opaque_keys.edx.locations import Location
 from xmodule.modulestore.exceptions import ItemNotFoundError, DuplicateCourseError, ReferentialIntegrityError
@@ -44,6 +43,7 @@ from opaque_keys.edx.locations import SlashSeparatedCourseKey
 from opaque_keys.edx.locator import CourseLocator
 from opaque_keys.edx.keys import UsageKey, CourseKey
 from xmodule.exceptions import HeartbeatFailure
+from xmodule.modulestore.edit_info import EditInfoRuntimeMixin
 
 log = logging.getLogger(__name__)
 
@@ -137,7 +137,7 @@ class MongoKeyValueStore(InheritanceKeyValueStore):
             return False
 
 
-class CachingDescriptorSystem(MakoDescriptorSystem):
+class CachingDescriptorSystem(MakoDescriptorSystem, EditInfoRuntimeMixin):
     """
     A system that has a cache of module json that it will use to load modules
     from, with a backup of calling to the underlying modulestore for more data
@@ -233,25 +233,16 @@ class CachingDescriptorSystem(MakoDescriptorSystem):
                     metadata_to_inherit = self.cached_metadata.get(unicode(non_draft_loc), {})
                     inherit_metadata(module, metadata_to_inherit)
 
-                edit_info = json_data.get('edit_info')
+                module._edit_info = json_data.get('edit_info')
 
-                # migrate published_by and published_date if edit_info isn't present
-                if not edit_info:
-                    module.edited_by = module.edited_on = module.subtree_edited_on = \
-                        module.subtree_edited_by = module.published_date = None
+                # migrate published_by and published_on if edit_info isn't present
+                if module._edit_info is None:
+                    module._edit_info = {}
                     raw_metadata = json_data.get('metadata', {})
-                    # published_date was previously stored as a list of time components instead of a datetime
+                    # published_on was previously stored as a list of time components instead of a datetime
                     if raw_metadata.get('published_date'):
-                        module.published_date = datetime(*raw_metadata.get('published_date')[0:6]).replace(tzinfo=UTC)
-                    module.published_by = raw_metadata.get('published_by')
-                # otherwise restore the stored editing information
-                else:
-                    module.edited_by = edit_info.get('edited_by')
-                    module.edited_on = edit_info.get('edited_on')
-                    module.subtree_edited_on = edit_info.get('subtree_edited_on')
-                    module.subtree_edited_by = edit_info.get('subtree_edited_by')
-                    module.published_date = edit_info.get('published_date')
-                    module.published_by = edit_info.get('published_by')
+                        module._edit_info['published_date'] = datetime(*raw_metadata.get('published_date')[0:6]).replace(tzinfo=UTC)
+                    module._edit_info['published_by'] = raw_metadata.get('published_by')
 
                 # decache any computed pending field settings
                 module.save()
@@ -316,6 +307,42 @@ class CachingDescriptorSystem(MakoDescriptorSystem):
 
         return json
 
+    def get_edited_by(self, xblock):
+        """
+        See :class: cms.lib.xblock.runtime.EditInfoRuntimeMixin
+        """
+        return xblock._edit_info.get('edited_by')
+
+    def get_edited_on(self, xblock):
+        """
+        See :class: cms.lib.xblock.runtime.EditInfoRuntimeMixin
+        """
+        return xblock._edit_info.get('edited_on')
+
+    def get_subtree_edited_by(self, xblock):
+        """
+        See :class: cms.lib.xblock.runtime.EditInfoRuntimeMixin
+        """
+        return xblock._edit_info.get('subtree_edited_by')
+
+    def get_subtree_edited_on(self, xblock):
+        """
+        See :class: cms.lib.xblock.runtime.EditInfoRuntimeMixin
+        """
+        return xblock._edit_info.get('subtree_edited_on')
+
+    def get_published_by(self, xblock):
+        """
+        See :class: cms.lib.xblock.runtime.EditInfoRuntimeMixin
+        """
+        return xblock._edit_info.get('published_by')
+
+    def get_published_on(self, xblock):
+        """
+        See :class: cms.lib.xblock.runtime.EditInfoRuntimeMixin
+        """
+        return xblock._edit_info.get('published_date')
+
 
 # The only thing using this w/ wildcards is contentstore.mongo for asset retrieval
 def location_to_query(location, wildcard=True, tag='i4x'):
@@ -356,7 +383,47 @@ def as_published(location):
     return location.replace(revision=MongoRevisionKey.published)
 
 
-class MongoModuleStore(ModuleStoreDraftAndPublished, ModuleStoreWriteBase):
+class MongoBulkOpsRecord(BulkOpsRecord):
+    """
+    Tracks whether there've been any writes per course and disables inheritance generation
+    """
+    def __init__(self):
+        super(MongoBulkOpsRecord, self).__init__()
+        self.dirty = False
+
+
+class MongoBulkOpsMixin(BulkOperationsMixin):
+    """
+    Mongo bulk operation support
+    """
+    _bulk_ops_record_type = MongoBulkOpsRecord
+
+    def _start_outermost_bulk_operation(self, bulk_ops_record, course_key):
+        """
+        Prevent updating the meta-data inheritance cache for the given course
+        """
+        # ensure it starts clean
+        bulk_ops_record.dirty = False
+
+    def _end_outermost_bulk_operation(self, bulk_ops_record, course_id):
+        """
+        Restart updating the meta-data inheritance cache for the given course.
+        Refresh the meta-data inheritance cache now since it was temporarily disabled.
+        """
+        if bulk_ops_record.dirty:
+            self.refresh_cached_metadata_inheritance_tree(course_id)
+            bulk_ops_record.dirty = False  # brand spanking clean now
+
+    def _is_in_bulk_operation(self, course_id, ignore_case=False):
+        """
+        Returns whether a bulk operation is in progress for the given course.
+        """
+        return super(MongoBulkOpsMixin, self)._is_in_bulk_operation(
+            course_id.for_branch(None), ignore_case
+        )
+
+
+class MongoModuleStore(ModuleStoreDraftAndPublished, ModuleStoreWriteBase, MongoBulkOpsMixin):
     """
     A Mongodb backed ModuleStore
     """
@@ -413,9 +480,6 @@ class MongoModuleStore(ModuleStoreDraftAndPublished, ModuleStoreWriteBase):
         self.i18n_service = i18n_service
         self.fs_service = fs_service
 
-        # performance optimization to prevent updating the meta-data inheritance tree during
-        # bulk write operations
-        self.ignore_write_events_on_courses = threading.local()
         self._course_run_cache = {}
 
     def close_connections(self):
@@ -435,37 +499,6 @@ class MongoModuleStore(ModuleStoreDraftAndPublished, ModuleStoreWriteBase):
         connection = self.collection.database.connection
         connection.drop_database(self.collection.database)
         connection.close()
-
-    def _begin_bulk_operation(self, course_id):
-        """
-        Prevent updating the meta-data inheritance cache for the given course
-        """
-        if not hasattr(self.ignore_write_events_on_courses, 'courses'):
-            self.ignore_write_events_on_courses.courses = set()
-
-        self.ignore_write_events_on_courses.courses.add(course_id)
-
-    def _end_bulk_operation(self, course_id):
-        """
-        Restart updating the meta-data inheritance cache for the given course.
-        Refresh the meta-data inheritance cache now since it was temporarily disabled.
-        """
-        if not hasattr(self.ignore_write_events_on_courses, 'courses'):
-            return
-
-        if course_id in self.ignore_write_events_on_courses.courses:
-            self.ignore_write_events_on_courses.courses.remove(course_id)
-            self.refresh_cached_metadata_inheritance_tree(course_id)
-
-    def _is_bulk_write_in_progress(self, course_id):
-        """
-        Returns whether a bulk write operation is in progress for the given course.
-        """
-        if not hasattr(self.ignore_write_events_on_courses, 'courses'):
-            return False
-
-        course_id = course_id.for_branch(None)
-        return course_id in self.ignore_write_events_on_courses.courses
 
     def fill_in_run(self, course_key):
         """
@@ -627,7 +660,7 @@ class MongoModuleStore(ModuleStoreDraftAndPublished, ModuleStoreWriteBase):
         a runtime may mean that some objects report old values for inherited data.
         """
         course_id = course_id.for_branch(None)
-        if not self._is_bulk_write_in_progress(course_id):
+        if not self._is_in_bulk_operation(course_id):
             # below is done for side effects when runtime is None
             cached_metadata = self._get_cached_metadata_inheritance_tree(course_id, force_refresh=True)
             if runtime:
@@ -1109,7 +1142,8 @@ class MongoModuleStore(ModuleStoreDraftAndPublished, ModuleStoreWriteBase):
         Set update on the specified item, and raises ItemNotFoundError
         if the location doesn't exist
         """
-
+        bulk_record = self._get_bulk_ops_record(location.course_key)
+        bulk_record.dirty = True
         # See http://www.mongodb.org/display/DOCS/Updating for
         # atomic update syntax
         result = self.collection.update(
@@ -1153,15 +1187,20 @@ class MongoModuleStore(ModuleStoreDraftAndPublished, ModuleStoreWriteBase):
             payload = {
                 'definition.data': definition_data,
                 'metadata': self._serialize_scope(xblock, Scope.settings),
-                'edit_info.edited_on': now,
-                'edit_info.edited_by': user_id,
-                'edit_info.subtree_edited_on': now,
-                'edit_info.subtree_edited_by': user_id,
+                'edit_info': {
+                    'edited_on': now,
+                    'edited_by': user_id,
+                    'subtree_edited_on': now,
+                    'subtree_edited_by': user_id,
+                }
             }
 
             if isPublish:
-                payload['edit_info.published_date'] = now
-                payload['edit_info.published_by'] = user_id
+                payload['edit_info']['published_date'] = now
+                payload['edit_info']['published_by'] = user_id
+            elif 'published_date' in getattr(xblock, '_edit_info', {}):
+                payload['edit_info']['published_date'] = xblock._edit_info['published_date']
+                payload['edit_info']['published_by'] = xblock._edit_info['published_by']
 
             if xblock.has_children:
                 children = self._serialize_scope(xblock, Scope.children)
@@ -1172,7 +1211,7 @@ class MongoModuleStore(ModuleStoreDraftAndPublished, ModuleStoreWriteBase):
             # don't update the subtree info for descendants of the publish root for efficiency
             if (
                 (not isPublish or (isPublish and is_publish_root)) and
-                not self._is_bulk_write_in_progress(xblock.location.course_key)
+                not self._is_in_bulk_operation(xblock.location.course_key)
             ):
                 ancestor_payload = {
                     'edit_info.subtree_edited_on': now,
@@ -1181,17 +1220,7 @@ class MongoModuleStore(ModuleStoreDraftAndPublished, ModuleStoreWriteBase):
                 self._update_ancestors(xblock.scope_ids.usage_id, ancestor_payload)
 
             # update the edit info of the instantiated xblock
-            xblock.edited_on = now
-            xblock.edited_by = user_id
-            xblock.subtree_edited_on = now
-            xblock.subtree_edited_by = user_id
-            if not hasattr(xblock, 'published_date'):
-                xblock.published_date = None
-            if not hasattr(xblock, 'published_by'):
-                xblock.published_by = None
-            if isPublish:
-                xblock.published_date = now
-                xblock.published_by = user_id
+            xblock._edit_info = payload['edit_info']
 
             # recompute (and update) the metadata inheritance tree which is cached
             self.refresh_cached_metadata_inheritance_tree(xblock.scope_ids.usage_id.course_key, xblock.runtime)
@@ -1201,7 +1230,6 @@ class MongoModuleStore(ModuleStoreDraftAndPublished, ModuleStoreWriteBase):
                 raise
             elif not self.has_course(xblock.location.course_key):
                 raise ItemNotFoundError(xblock.location.course_key)
-
 
         return xblock
 
@@ -1234,6 +1262,9 @@ class MongoModuleStore(ModuleStoreDraftAndPublished, ModuleStoreWriteBase):
         from orphan parents to avoid parents calculation overhead next time.
         """
         non_orphan_parents = []
+        # get bulk_record once rather than for each iteration
+        bulk_record = self._get_bulk_ops_record(location.course_key)
+
         for parent in parents:
             parent_loc = Location._from_deprecated_son(parent['_id'], location.course_key.run)
 
@@ -1243,6 +1274,7 @@ class MongoModuleStore(ModuleStoreDraftAndPublished, ModuleStoreWriteBase):
                 current_loc = ancestor_loc
                 ancestor_loc = self._get_raw_parent_location(current_loc, revision)
                 if ancestor_loc is None:
+                    bulk_record.dirty = True
                     # The parent is an orphan, so remove all the children including
                     # the location whose parent we are looking for from orphan parent
                     self.collection.update(
@@ -1408,3 +1440,29 @@ class MongoModuleStore(ModuleStoreDraftAndPublished, ModuleStoreWriteBase):
             return {ModuleStoreEnum.Type.mongo: True}
         else:
             raise HeartbeatFailure("Can't connect to {}".format(self.database.name), 'mongo')
+
+    def ensure_indexes(self):
+        """
+        Ensure that all appropriate indexes are created that are needed by this modulestore, or raise
+        an exception if unable to.
+
+        This method is intended for use by tests and administrative commands, and not
+        to be run during server startup.
+        """
+
+        # Because we often query for some subset of the id, we define this index:
+        self.collection.create_index([
+            ('_id.org', pymongo.ASCENDING),
+            ('_id.course', pymongo.ASCENDING),
+            ('_id.category', pymongo.ASCENDING),
+            ('_id.name', pymongo.ASCENDING),
+        ])
+
+        # Because we often scan for all category='course' regardless of the value of the other fields:
+        self.collection.create_index('_id.category')
+
+        # Because lms calls get_parent_locations frequently (for path generation):
+        self.collection.create_index('definition.children', sparse=True)
+
+        # To allow prioritizing draft vs published material
+        self.collection.create_index('_id.revision')

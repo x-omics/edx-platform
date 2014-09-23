@@ -3,23 +3,23 @@ import ddt
 import unittest
 from bson.objectid import ObjectId
 from mock import MagicMock, Mock, call
-from xmodule.modulestore.split_mongo.split import BulkWriteMixin
+from xmodule.modulestore.split_mongo.split import SplitBulkWriteMixin
 from xmodule.modulestore.split_mongo.mongo_connection import MongoConnection
 
-from opaque_keys.edx.locator import CourseLocator, BlockUsageLocator, VersionTree, LocalId
+from opaque_keys.edx.locator import CourseLocator
 
 
 class TestBulkWriteMixin(unittest.TestCase):
     def setUp(self):
         super(TestBulkWriteMixin, self).setUp()
-        self.bulk = BulkWriteMixin()
+        self.bulk = SplitBulkWriteMixin()
         self.bulk.SCHEMA_VERSION = 1
         self.clear_cache = self.bulk._clear_cache = Mock(name='_clear_cache')
         self.conn = self.bulk.db_connection = MagicMock(name='db_connection', spec=MongoConnection)
         self.conn.get_course_index.return_value = {'initial': 'index'}
 
-        self.course_key = CourseLocator('org', 'course', 'run-a')
-        self.course_key_b = CourseLocator('org', 'course', 'run-b')
+        self.course_key = CourseLocator('org', 'course', 'run-a', branch='test')
+        self.course_key_b = CourseLocator('org', 'course', 'run-b', branch='test')
         self.structure = {'this': 'is', 'a': 'structure', '_id': ObjectId()}
         self.index_entry = {'this': 'is', 'an': 'index'}
 
@@ -173,6 +173,13 @@ class TestBulkWriteMixinClosed(TestBulkWriteMixin):
             self.bulk.version_structure(self.course_key, self.structure, 'user_id')['_id'],
             self.structure['_id']
         )
+
+    def test_version_structure_new_course(self):
+        self.conn.get_course_index.return_value = None
+        self.bulk._begin_bulk_operation(self.course_key)
+        version_result = self.bulk.version_structure(self.course_key, self.structure, 'user_id')
+        get_result = self.bulk.get_structure(self.course_key, version_result['_id'])
+        self.assertEquals(version_result, get_result)
 
 class TestBulkWriteMixinClosedAfterPrevTransaction(TestBulkWriteMixinClosed, TestBulkWriteMixinPreviousTransaction):
     """
@@ -399,6 +406,7 @@ class TestBulkWriteMixinFindMethods(TestBulkWriteMixin):
         results = self.bulk.find_ancestor_structures(original_version, block_id)
         self.conn.find_ancestor_structures.assert_called_once_with(original_version, block_id)
         self.assertItemsEqual(active_match + db_match, results)
+
 
 @ddt.ddt
 class TestBulkWriteMixinOpen(TestBulkWriteMixin):

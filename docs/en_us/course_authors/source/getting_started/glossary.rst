@@ -10,6 +10,12 @@ Glossary
 A
 ****
 
+.. _AB Test:
+
+**A/B Test**
+
+  See `Content Experiment`_.
+
 .. _About Page:
 
 **About Page**
@@ -88,6 +94,15 @@ C
   contain one or more components. For more information, see :ref:`Developing
   Course Components`.
 
+.. _Content Experiment:
+
+**Content Experiment**
+
+  You can define alternative course content to be delivered to different,
+  randomly assigned groups of students. Also known as A/B or split testing, you
+  use content experiments to compare the performance of students who have been
+  exposed to different versions of of the content. For more information, see
+  :ref:`Creating Content Experiments`.
 
 .. _Course Accordion:
  
@@ -442,11 +457,13 @@ The page in the learning management system that shows students their scores on g
 
 .. _Public Unit:
  
-**Public Unit**
+.. **Public Unit**
 
-  A unit whose **Visibility** option is set to Public so that the unit is visible to students, if the subsection that contains the unit has been released.
+..  A unit whose **Visibility** option is set to Public so that the unit is
+..  visible to students, if the subsection that contains the unit has been
+..  released.
 
-  See :ref:`Public and Private Units` for more information.
+..  See :ref:`Public and Private Units` for more information.
 
 .. _Q:
 
@@ -512,6 +529,11 @@ S
 
   The graphical user interface in a Problem component that contains formatting buttons and is available for some problem types. For more information, see :ref:`Problem Studio View`.
 
+.. _Split_Test:
+
+**Split Test**
+
+  See `Content Experiment`_.
 
 
 .. _Subsection:

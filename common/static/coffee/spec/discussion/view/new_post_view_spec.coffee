@@ -1,59 +1,13 @@
 # -*- coding: utf-8 -*-
 describe "NewPostView", ->
     beforeEach ->
-        setFixtures(
-            """
-            <div class="discussion-body">
-                <div class="discussion-column">
-                  <article class="new-post-article" style="display: block;"></article>
-                </div>
-            </div>
-
-            <script aria-hidden="true" type="text/template" id="new-post-template">
-                <form class="forum-new-post-form">
-                    <% if (mode=="tab") { %>
-                    <div class="post-field">
-                        <div class="field-label">
-                            <span class="field-label-text">
-                               Topic Area:
-                            </span>
-                            <div class="field-input post-topic">
-                                <a href="#" class="post-topic-button">
-                                    <span class="sr">${_("Discussion topics; current selection is: ")}</span>
-                                    <span class="js-selected-topic"></span>
-                                    <span class="drop-arrow" aria-hidden="true">▾</span>
-                                </a>
-                                <div class="topic-menu-wrapper">
-                                    <ul class="topic-menu" role="menu"><%= topics_html %></ul>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <% } %>
-                    <select class="js-group-select">
-                      <option value="">All Groups</option>
-                      <option value="1">Group 1</option>
-                      <option value="2">Group 2</option>
-                    </select>
-                </form>
-            </script>
-
-            <script aria-hidden="true" type="text/template" id="new-post-menu-entry-template">
-                <li role="menuitem">
-                    <a href="#" class="topic-title" data-discussion-id="<%- id %>" data-cohorted="<%- is_cohorted %>"><%- text %></a>
-                </li>
-            </script>
-
-            <script aria-hidden="true" type="text/template" id="new-post-menu-category-template">
-                <li role="menuitem">
-                    <span class="topic-title"><%- text %></span>
-                    <ul role="menu" class="topic-submenu"><%= entries %></ul>
-                </li>
-            </script>
-            """
-        )
+        DiscussionSpecHelper.setUpGlobals()
+        DiscussionSpecHelper.setUnderscoreFixtures()
         window.$$course_id = "edX/999/test"
-        spyOn(DiscussionUtil, "makeWmdEditor")
+        spyOn(DiscussionUtil, "makeWmdEditor").andCallFake(
+          ($content, $local, cls_identifier) ->
+            $local("." + cls_identifier).html("<textarea></textarea>")
+        )
         @discussion = new Discussion([], {pages: 1})
 
     describe "Drop down works correct", ->
@@ -77,10 +31,11 @@ describe "NewPostView", ->
             "entries": {}
           },
           "allow_anonymous": true,
-          "allow_anonymous_to_peers": true
+          "allow_anonymous_to_peers": true,
+          "is_cohorted": true
         })
         @view = new NewPostView(
-          el: $(".new-post-article"),
+          el: $("#fixture-element"),
           collection: @discussion,
           course_settings: @course_settings,
           mode: "tab"
@@ -144,6 +99,7 @@ describe "NewPostView", ->
               }
             }
           )
+          DiscussionSpecHelper.makeModerator()
           view.render()
 
         expectCohortSelectorEnabled = (view, enabled) ->
@@ -163,6 +119,138 @@ describe "NewPostView", ->
           @view.$("a.topic-title[data-discussion-id=non-cohorted]").click()
           expectCohortSelectorEnabled(@view, false)
 
+    describe "cohort selector", ->
+      beforeEach ->
+        @course_settings = new DiscussionCourseSettings({
+          "category_map": {
+            "children": ["Topic"],
+            "entries": {"Topic": {"is_cohorted": true, "id": "topic"}}
+          },
+          "allow_anonymous": false,
+          "allow_anonymous_to_peers": false,
+          "is_cohorted": true,
+          "cohorts": [
+            {"id": 1, "name": "Cohort1"},
+            {"id": 2, "name": "Cohort2"}
+          ]
+        })
+        @view = new NewPostView(
+          el: $("#fixture-element"),
+          collection: @discussion,
+          course_settings: @course_settings,
+          mode: "tab"
+        )
+
+      checkVisibility = (view, expectedVisible) =>
+        view.render()
+        expect(view.$(".js-group-select").is(":visible")).toEqual(expectedVisible)
+        if expectedVisible
+          expect(view.$(".js-group-select").prop("disabled")).toEqual(false)
+
+      it "is not visible to students", ->
+        checkVisibility(@view, false)
+
+      it "allows TAs to see the cohort selector", ->
+        DiscussionSpecHelper.makeTA()
+        checkVisibility(@view, true)
+
+      it "allows moderators to see the cohort selector", ->
+        DiscussionSpecHelper.makeModerator()
+        checkVisibility(@view, true)
+
+      it "allows the user to make a cohort selection", ->
+        DiscussionSpecHelper.makeModerator()
+        @view.render()
+        expectedGroupId = null
+        DiscussionSpecHelper.makeAjaxSpy(
+          (params) -> expect(params.data.group_id).toEqual(expectedGroupId)
+        )
+
+        _.each(
+          ["1", "2", ""],
+          (groupIdStr) =>
+            expectedGroupId = groupIdStr
+            @view.$(".js-group-select").val(groupIdStr)
+            @view.$(".js-post-title").val("dummy title")
+            @view.$(".js-post-body textarea").val("dummy body")
+            @view.$(".forum-new-post-form").submit()
+            expect($.ajax).toHaveBeenCalled()
+            $.ajax.reset()
+        )
+
+    describe "cancel post resets form ", ->
+      beforeEach ->
+        @course_settings = new DiscussionCourseSettings({
+          "allow_anonymous_to_peers":true,
+          "allow_anonymous":true,
+          "category_map": {
+            "subcategories": {
+              "Week 1": {
+                "subcategories": {},
+                "children": [
+                  "Topic-Level Student-Visible Label"
+                ],
+                "entries": {
+                  "Topic-Level Student-Visible Label": {
+                    "sort_key": null,
+                    "is_cohorted": false,
+                    "id": "2b3a858d0c884eb4b272dbbe3f2ffddd"
+                  }
+                }
+              }
+            },
+            "children": [
+              "General",
+              "Week 1"
+            ],
+            "entries": {
+              "General": {
+                "sort_key": "General",
+                "is_cohorted": false,
+                "id": "i4x-waqastest-waqastest-course-waqastest"
+              }
+            }
+          }
+        })
+
+      checkPostCancelReset = (mode, discussion, course_settings) ->
+        view = new NewPostView(
+          el: $("#fixture-element"),
+          collection: discussion,
+          course_settings: course_settings,
+          mode: mode
+        )
+        view.render()
+        eventSpy = jasmine.createSpy('eventSpy')
+        view.listenTo(view, "newPost:cancel", eventSpy)
+        view.$(".post-errors").html("<li class='post-error'>Title can't be empty</li>")
+        view.$("#tab-post-type-discussion").click()
+        view.$(".js-post-title").val("Test Title")
+        view.$(".js-post-body textarea").val("Test body")
+        view.$(".wmd-preview p").html("Test body")
+        view.$(".js-follow").prop("checked", false)
+        view.$(".js-anon").prop("checked", true)
+        view.$(".js-anon-peers").prop("checked", true)
+        if mode == "tab"
+          view.$("a[data-discussion-id='2b3a858d0c884eb4b272dbbe3f2ffddd']").click()
+        view.$(".cancel").click()
+        expect(eventSpy).toHaveBeenCalled()
+        expect(view.$(".post-errors").html()).toEqual("");
+        expect($("##{mode}-post-type-question").prop("checked")).toBe(true)
+        expect($("##{mode}-post-type-discussion").prop("checked")).toBe(false)
+        expect(view.$(".js-post-title").val()).toEqual("");
+        expect(view.$(".js-post-body textarea").val()).toEqual("");
+        expect(view.$(".js-follow").prop("checked")).toBe(true)
+        expect(view.$(".js-anon").prop("checked")).toBe(false)
+        expect(view.$(".js-anon-peers").prop("checked")).toBe(false)
+        if mode == "tab"
+          expect(view.$(".js-selected-topic").text()).toEqual("General")
+
+      _.each(["tab", "inline"], (mode) =>
+        it "resets the form in #{mode} mode", ->
+          checkPostCancelReset(mode, @discussion, @course_settings)
+      )
+
     it "posts to the correct URL", ->
       topicId = "test_topic"
       spyOn($, "ajax").andCallFake(
@@ -171,7 +259,7 @@ describe "NewPostView", ->
           {always: ->}
       )
       view = new NewPostView(
-        el: $(".new-post-article"),
+        el: $("#fixture-element"),
         collection: @discussion,
         course_settings: new DiscussionCourseSettings({
           allow_anonymous: false,

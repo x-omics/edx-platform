@@ -28,6 +28,7 @@ urlpatterns = ('',  # nopep8
     url(r'^reject_name_change$', 'student.views.reject_name_change'),
     url(r'^pending_name_changes$', 'student.views.pending_name_changes'),
     url(r'^event$', 'track.views.user_track'),
+    url(r'^segmentio/event$', 'track.views.segmentio.track_segmentio_event'),
     url(r'^t/(?P<template>[^/]*)$', 'static_template_view.views.index'),   # TODO: Is this used anymore? What is STATIC_GRAB?
 
     url(r'^accounts/login$', 'student.views.accounts_login', name="accounts_login"),
@@ -62,8 +63,6 @@ urlpatterns = ('',  # nopep8
     url(r'^user_api/', include('user_api.urls')),
 
     url(r'^lang_pref/', include('lang_pref.urls')),
-
-    url(r'^', include('waffle.urls')),
 
     url(r'^i18n/', include('django.conf.urls.i18n')),
 
@@ -464,6 +463,12 @@ if settings.FEATURES.get('AUTH_USE_OPENID_PROVIDER'):
         url(r'^openid/provider/xrds/$', 'external_auth.views.provider_xrds', name='openid-provider-xrds')
     )
 
+if settings.FEATURES.get('ENABLE_OAUTH2_PROVIDER'):
+    urlpatterns += (
+        url(r'^oauth2/', include('oauth2_provider.urls', namespace='oauth2')),
+    )
+
+
 if settings.FEATURES.get('ENABLE_LMS_MIGRATION'):
     urlpatterns += (
         url(r'^migrate/modules$', 'lms_migration.migrate.manage_modulestores'),
@@ -533,6 +538,9 @@ urlpatterns = patterns(*urlpatterns)
 
 if settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+
+    # in debug mode, allow any template to be rendered (most useful for UX reference templates)
+    urlpatterns += url(r'^template/(?P<template>.+)$', 'debug.views.show_reference_template'),
 
 #Custom error pages
 handler404 = 'static_template_view.views.render_404'

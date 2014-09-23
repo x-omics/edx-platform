@@ -1,10 +1,10 @@
 <%! from django.utils.translation import ugettext as _ %>
 <%! from django.template import RequestContext %>
 <%! from third_party_auth import pipeline %>
+<%! from microsite_configuration import microsite %>
 
 <%!
   from django.core.urlresolvers import reverse
-  import waffle
 %>
 
 <%
@@ -30,6 +30,12 @@
         (e).preventDefault();
 
         $(this).closest('.message.is-expandable').toggleClass('is-expanded');
+
+        course = $("#upgrade-to-verified").data("course-id");
+        analytics.track('edx.bi.dashboard.upsell_copy.clicked', {
+          category: 'user-engagement',
+          label: course
+        });
     }
 
     $("#failed-verification-button-dismiss").click(function(event) {
@@ -44,15 +50,6 @@
       user = $(event.target).data("user");
       course = $(event.target).data("course-id");
       Logger.log('edx.course.enrollment.upgrade.clicked', [user, course], null);
-      % if waffle.flag_is_active(request, 'alternate_upsell_copy'):
-      analytics.track("Clicked on Alternate Upsell Copy", {
-        course: course
-      });
-      % else:
-      analytics.track("Clicked on Regular Upsell Copy", {
-        course: course
-      });
-      % endif
     });
 
     $(".email-settings").click(function(event) {
@@ -223,7 +220,7 @@
         <%include file='dashboard/_dashboard_info_language.html' />
         %endif
 
-        % if settings.FEATURES.get('ENABLE_THIRD_PARTY_AUTH'):
+        % if microsite.get_value('ENABLE_THIRD_PARTY_AUTH', settings.FEATURES.get('ENABLE_THIRD_PARTY_AUTH')):
         <li class="controls--account">
           <span class="title">
             ## Translators: this section lists all the third-party authentication providers (for example, Google and LinkedIn) the user can link with or unlink from their edX account.
