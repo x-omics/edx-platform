@@ -1,9 +1,12 @@
 .. _Change Log:
 
-**********
+###########
 Change Log
-**********
+###########
 
+**********************
+October-December 2014
+**********************
 
 .. list-table::
    :widths: 10 70
@@ -11,6 +14,35 @@ Change Log
 
    * - Date
      - Change
+   * - 10/16/14
+     - Updated video events with new fields relating to mobile device use in
+       the :ref:`Tracking Logs` chapter.
+   * - 10/07/14
+     - Added new student and instructor events relating to cohort use to the
+       :ref:`Tracking Logs` chapter.
+   * - 
+     - Removed information about XML course formats. See the `edX Open
+       Learning XML Guide <http://edx-open-learning-
+       xml.readthedocs.org/en/latest/index.html>`_ for information about
+       building XML courses.
+
+
+**********************
+July-September 2014
+**********************
+
+.. list-table::
+   :widths: 10 70
+   :header-rows: 1
+
+   * - Date
+     - Change
+   * - 09/30/14
+     - Added information about the data that is available to course teams to
+       the :ref:`Package` chapter.
+   * - 09/18/14
+     - Added descriptions of two columns added to the :ref:`auth_userprofile
+       table<auth_userprofile>`.
    * - 09/08/14
      - Added cautions to the :ref:`Getting_Credentials_Data_Czar` chapter.
    * - 09/04/14
@@ -35,6 +67,18 @@ Change Log
    * - 07/10/14
      - Added the :ref:`Getting_Credentials_Data_Czar` chapter with information
        to help new data czars set up credentials for secure data transfers.
+
+
+**********************
+April-June 2014
+**********************
+
+.. list-table::
+   :widths: 10 70
+   :header-rows: 1
+
+   * - Date
+     - Change
    * - 06/27/14
      - Made a correction to the ``edx.forum.searched`` event name in the
        :ref:`Tracking Logs` chapter.
@@ -43,7 +87,7 @@ Change Log
    * - 
      - Updated the ``seek_video`` event in the :ref:`Tracking Logs` chapter.
    * - 06/23/14
-     - Added a :ref:`Preface` with resources for course teams, developers,
+     - Added a `Preface`_ with resources for course teams, developers,
        researchers, and students.
    * - 05/23/14
      - Added descriptions of the enrollment upgrade events to the
@@ -82,6 +126,18 @@ Change Log
        data packages.
    * - 04/25/14
      - Added new event types to the :ref:`Tracking Logs` chapter for interactions with PDF files.
+       
+
+**********************
+January-March 2014
+**********************
+
+.. list-table::
+   :widths: 10 70
+   :header-rows: 1
+
+   * - Date
+     - Change
    * - 03/31/14
      - Added new fields for the server ``problem_check`` event type to the :ref:`Tracking Logs` chapter.
    * -
@@ -101,3 +157,4 @@ Change Log
    * - 02/14/14
      - Added the ``seek_video`` and ``speed_change_video`` event types to the :ref:`Tracking Logs` chapter.
 
+.. _Preface: http://edx.readthedocs.org/projects/devdata/en/latest/preface.html

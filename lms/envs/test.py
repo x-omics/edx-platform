@@ -178,7 +178,7 @@ CACHES = {
 
     'mongo_metadata_inheritance': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': '/var/tmp/mongo_metadata_inheritance',
+        'LOCATION': os.path.join(tempfile.gettempdir(), 'mongo_metadata_inheritance'),
         'TIMEOUT': 300,
         'KEY_FUNCTION': 'util.memcache.safe_key',
     },
@@ -219,6 +219,10 @@ OPENID_PROVIDER_TRUSTED_ROOTS = ['*']
 
 ############################## OAUTH2 Provider ################################
 FEATURES['ENABLE_OAUTH2_PROVIDER'] = True
+
+########################### External REST APIs #################################
+FEATURES['ENABLE_MOBILE_REST_API'] = True
+FEATURES['ENABLE_VIDEO_ABSTRACTION_LAYER_API'] = True
 
 ###################### Payment ##############################3
 # Enable fake payment processing page
@@ -342,6 +346,8 @@ MICROSITE_CONFIGURATION = {
     }
 }
 MICROSITE_ROOT_DIR = COMMON_ROOT / 'test' / 'test_microsites'
+MICROSITE_TEST_HOSTNAME = 'testmicrosite.testserver'
+
 FEATURES['USE_MICROSITES'] = True
 
 # add extra template directory for test-only templates

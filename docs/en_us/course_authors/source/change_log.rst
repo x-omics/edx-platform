@@ -1,6 +1,27 @@
 ############
 Change Log
 ############
+
+       
+*****************
+October, 2014
+*****************
+
+.. list-table::
+   :widths: 10 70
+   :header-rows: 1
+
+   * - Date
+     - Change
+   * - 10/16/14
+     - Updated :ref:`Set Important Dates for Your Course` to reflect change
+       that course dates now use UTC.
+   * - 10/14/14
+     - Removed the chapter on the Vital Source E-Reader tool, as it is no
+       longer supported in the edX Platform.
+   * - 10/7/14
+     - Added the :ref:`Including Student Cohorts` chapter.
+       
        
 *****************
 September, 2014
@@ -12,6 +33,9 @@ September, 2014
 
    * - Date
      - Change
+   * - 09/30/14
+     - Added information about accessing edX Insights to the :ref:`Course Data`
+       and :ref:`Enrollment` chapters.
    * - 09/04/14
      - Updated the :ref:`Discussions` and :ref:`Discussions for Students and
        Staff` chapters to include information about choosing the type of post
@@ -22,6 +46,8 @@ September, 2014
      - Removed "These problems only allow integers and a few select constants" from table of problem types in :ref:`Create Exercises`.
    * - 
      - Added a note about angle bracket characters to the :ref:`Dropdown` topic.
+   * - 09/26/14
+     - Added :ref:`Molecule Viewer` to :ref:`Create Exercises`
 
 **************
 August, 2014
@@ -188,7 +214,7 @@ May, 2014
      - Updated :ref:`Assigning_discussion_roles` with a note about course staff
        requiring explicit granting of discussion administration roles.
    * - 
-     - Added :ref:`VitalSource` topic.
+     - Added VitalSource topic.
    * - 05/08/14
      - Added warnings to :ref:`Add a File` about file size.
    * - 05/07/14

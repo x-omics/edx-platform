@@ -269,6 +269,7 @@ MODULESTORE_BRANCH = 'draft-preferred'
 # Change DEBUG/TEMPLATE_DEBUG in your environment settings files, not here
 DEBUG = False
 TEMPLATE_DEBUG = False
+SESSION_COOKIE_SECURE = False
 
 # Site info
 SITE_ID = 1
@@ -306,8 +307,11 @@ STATICFILES_DIRS = [
 # Locale/Internationalization
 TIME_ZONE = 'America/New_York'  # http://en.wikipedia.org/wiki/List_of_tz_zones_by_name
 LANGUAGE_CODE = 'en'  # http://www.i18nguy.com/unicode/language-identifiers.html
+LANGUAGES_BIDI = lms.envs.common.LANGUAGES_BIDI
 
 LANGUAGES = lms.envs.common.LANGUAGES
+LANGUAGE_DICT = dict(LANGUAGES)
+
 USE_I18N = True
 USE_L10N = True
 
@@ -366,11 +370,29 @@ PIPELINE_CSS = {
         ],
         'output_filename': 'css/cms-style-app-extend1.css',
     },
+    'style-app-rtl': {
+        'source_filenames': [
+            'sass/style-app-rtl.css',
+        ],
+        'output_filename': 'css/cms-style-app-rtl.css',
+    },
+    'style-app-extend1-rtl': {
+        'source_filenames': [
+            'sass/style-app-extend1-rtl.css',
+        ],
+        'output_filename': 'css/cms-style-app-extend1-rtl.css',
+    },
     'style-xmodule': {
         'source_filenames': [
             'sass/style-xmodule.css',
         ],
         'output_filename': 'css/cms-style-xmodule.css',
+    },
+    'style-xmodule-rtl': {
+        'source_filenames': [
+            'sass/style-xmodule-rtl.css',
+        ],
+        'output_filename': 'css/cms-style-xmodule-rtl.css',
     },
     'style-xmodule-annotations': {
         'source_filenames': [
@@ -633,7 +655,6 @@ MAX_FAILED_LOGIN_ATTEMPTS_LOCKOUT_PERIOD_SECS = 15 * 60
 ### Apps only installed in some instances
 
 OPTIONAL_APPS = (
-    'edx_jsdraw',
     'mentoring',
 
     # edx-ora2
@@ -642,7 +663,10 @@ OPTIONAL_APPS = (
     'openassessment.assessment',
     'openassessment.fileupload',
     'openassessment.workflow',
-    'openassessment.xblock'
+    'openassessment.xblock',
+
+    # edxval
+    'edxval'
 )
 
 

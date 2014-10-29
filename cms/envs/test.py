@@ -138,7 +138,7 @@ CACHES = {
 
     'mongo_metadata_inheritance': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': '/var/tmp/mongo_metadata_inheritance',
+        'LOCATION': os.path.join(tempfile.gettempdir(), 'mongo_metadata_inheritance'),
         'TIMEOUT': 300,
         'KEY_FUNCTION': 'util.memcache.safe_key',
     },
@@ -189,9 +189,6 @@ PASSWORD_HASHERS = (
 SEGMENT_IO_KEY = '***REMOVED***'
 
 FEATURES['ENABLE_SERVICE_STATUS'] = True
-
-# This is to disable a test under the common directory that will not pass when run under CMS
-FEATURES['DISABLE_RESET_EMAIL_TEST'] = True
 
 # Toggles embargo on for testing
 FEATURES['EMBARGO'] = True

@@ -40,7 +40,7 @@ def _attr_safe_json(obj):
     return saxutils.escape(json.dumps(obj), {'"': '&quot;'})
 
 @newrelic.agent.function_trace()
-def make_course_settings(course, include_category_map=False):
+def make_course_settings(course):
     """
     Generate a JSON-serializable model for course settings, which will be used to initialize a
     DiscussionCourseSettings object on the client.
@@ -51,10 +51,8 @@ def make_course_settings(course, include_category_map=False):
         'allow_anonymous': course.allow_anonymous,
         'allow_anonymous_to_peers': course.allow_anonymous_to_peers,
         'cohorts': [{"id": str(g.id), "name": g.name} for g in get_course_cohorts(course)],
+        'category_map': utils.get_discussion_category_map(course)
     }
-
-    if include_category_map:
-        obj['category_map'] = utils.get_discussion_category_map(course)
 
     return obj
 
@@ -145,8 +143,11 @@ def inline_discussion(request, course_id, discussion_id):
     with newrelic.agent.FunctionTrace(nr_transaction, "get_metadata_for_threads"):
         annotated_content_info = utils.get_metadata_for_threads(course_key, threads, request.user, user_info)
     is_staff = cached_has_permission(request.user, 'openclose_thread', course.id)
+    threads = [utils.prepare_content(thread, course_key, is_staff) for thread in threads]
+    with newrelic.agent.FunctionTrace(nr_transaction, "add_courseware_context"):
+        add_courseware_context(threads, course)
     return utils.JsonResponse({
-        'discussion_data': [utils.prepare_content(thread, course_key, is_staff) for thread in threads],
+        'discussion_data': threads,
         'user_info': user_info,
         'annotated_content_info': annotated_content_info,
         'page': query_params['page'],
@@ -164,7 +165,7 @@ def forum_form_discussion(request, course_id):
     nr_transaction = newrelic.agent.current_transaction()
 
     course = get_course_with_access(request.user, 'load_forum', course_key, check_if_enrolled=True)
-    course_settings = make_course_settings(course, include_category_map=True)
+    course_settings = make_course_settings(course)
 
     user = cc.User.from_django_user(request.user)
     user_info = user.to_dict()
@@ -228,7 +229,7 @@ def single_thread(request, course_id, discussion_id, thread_id):
     nr_transaction = newrelic.agent.current_transaction()
 
     course = get_course_with_access(request.user, 'load_forum', course_key)
-    course_settings = make_course_settings(course, include_category_map=True)
+    course_settings = make_course_settings(course)
     cc_user = cc.User.from_django_user(request.user)
     user_info = cc_user.to_dict()
     is_moderator = cached_has_permission(request.user, "see_all_cohorts", course_key)
@@ -251,7 +252,7 @@ def single_thread(request, course_id, discussion_id, thread_id):
     # verify that the thread belongs to the requesting student's cohort
     if is_commentable_cohorted(course_key, discussion_id) and not is_moderator:
         user_group_id = get_cohort_id(request.user, course_key)
-        if hasattr(thread, "group_id") and user_group_id != thread.group_id:
+        if getattr(thread, "group_id", None) is not None and user_group_id != thread.group_id:
             raise Http404
 
     is_staff = cached_has_permission(request.user, 'openclose_thread', course.id)
@@ -322,8 +323,6 @@ def user_profile(request, course_id, user_id):
     #TODO: Allow sorting?
     course = get_course_with_access(request.user, 'load_forum', course_key)
     try:
-        profiled_user = cc.User(id=user_id, course_id=course_key)
-
         query_params = {
             'page': request.GET.get('page', 1),
             'per_page': THREADS_PER_PAGE,   # more than threads_per_page to show more activities
@@ -335,6 +334,9 @@ def user_profile(request, course_id, user_id):
             return HttpResponseBadRequest("Invalid group_id")
         if group_id is not None:
             query_params['group_id'] = group_id
+            profiled_user = cc.User(id=user_id, course_id=course_key, group_id=group_id)
+        else:
+            profiled_user = cc.User(id=user_id, course_id=course_key)
 
         threads, page, num_pages = profiled_user.active_threads(query_params)
         query_params['page'] = page
