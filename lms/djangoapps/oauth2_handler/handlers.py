@@ -1,10 +1,14 @@
 """ Handlers for OpenID Connect provider. """
 
-import branding
+from django.conf import settings
+
 from courseware.access import has_access
 from student.models import anonymous_id_for_user
+from student.models import UserProfile
 from user_api.models import UserPreference
 from lang_pref import LANGUAGE_KEY
+from xmodule.modulestore.django import modulestore
+from xmodule.course_module import CourseDescriptor
 
 
 class OpenIDHandler(object):
@@ -33,8 +37,14 @@ class ProfileHandler(object):
     """ Basic OpenID Connect `profile` scope handler with `locale` claim. """
 
     def scope_profile(self, _data):
-        """ Add the locale claim. """
-        return ['locale']
+        """ Add specialized claims. """
+        return ['name', 'locale']
+
+    def claim_name(self, data):
+        """ User displayable full name. """
+        user = data['user']
+        profile = UserProfile.objects.get(user=user)
+        return profile.name
 
     def claim_locale(self, data):
         """
@@ -44,6 +54,11 @@ class ProfileHandler(object):
         """
 
         language = UserPreference.get_preference(data['user'], LANGUAGE_KEY)
+
+        # If the user has no language specified, return the default one.
+        if not language:
+            language = getattr(settings, 'LANGUAGE_CODE')
+
         return language
 
 
@@ -137,7 +152,7 @@ class CourseAccessHandler(object):
         user = data['user']
         values = set(data.get('values', []))
 
-        courses = branding.get_visible_courses()
+        courses = _get_all_courses()
         courses = (c for c in courses if has_access(user, access_type, c))
         course_ids = (unicode(c.id) for c in courses)
 
@@ -172,3 +187,13 @@ class IDTokenHandler(OpenIDHandler, ProfileHandler, CourseAccessHandler):
 class UserInfoHandler(OpenIDHandler, ProfileHandler, CourseAccessHandler):
     """ Configure the UserInfo handler for the LMS. """
     pass
+
+
+def _get_all_courses():
+    """
+    Utitilty function to list all available courses.
+
+    """
+    ms_courses = modulestore().get_courses()
+    courses = [c for c in ms_courses if isinstance(c, CourseDescriptor)]
+    return courses

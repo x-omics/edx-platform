@@ -35,6 +35,7 @@ Course Content Index`.
    lti_component
    math_expression_input
    molecule_editor
+   molecule_viewer
    multiple_choice
    mult_choice_num_input
    numerical_input
@@ -45,7 +46,6 @@ Course Content Index`.
    problem_in_latex
    protein_builder
    text_input
-   vitalsource
    word_cloud
    custom_python
    zooming_image

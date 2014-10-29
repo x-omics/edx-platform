@@ -72,16 +72,12 @@ class CourseTestCase(ModuleStoreTestCase):
         will be cleared out before each test case execution and deleted
         afterwards.
         """
-        user_password = super(CourseTestCase, self).setUp()
+        self.user_password = super(CourseTestCase, self).setUp()
 
         self.client = AjaxEnabledTestClient()
-        self.client.login(username=self.user.username, password=user_password)
+        self.client.login(username=self.user.username, password=self.user_password)
 
-        self.course = CourseFactory.create(
-            org='MITx',
-            number='999',
-            display_name='Robot Super Course',
-        )
+        self.course = CourseFactory.create()
 
     def create_non_staff_authed_user_client(self, authenticate=True):
         """

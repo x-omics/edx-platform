@@ -1,5 +1,6 @@
 ## -*- coding: utf-8 -*-
 <%! from django.utils.translation import ugettext as _ %>
+<%! from django.template.defaultfilters import escapejs %>
 <%namespace name='static' file='static_content.html'/>
 
 <!doctype html>
@@ -7,14 +8,19 @@
 <!--[if IE 8]><html class="ie8 lte9 lte8" lang="${LANGUAGE_CODE}"><![endif]-->
 <!--[if IE 9]><html class="ie9 lte9" lang="${LANGUAGE_CODE}"><![endif]-->
 <!--[if gt IE 9]><!--><html lang="${LANGUAGE_CODE}"><!--<![endif]-->
-  <head>
+<%
+    # set doc language direction
+    from django.utils.translation import get_language_bidi
+    dir_rtl = 'rtl' if get_language_bidi() else 'ltr'
+%>
+  <head dir="${dir_rtl}">
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
     <title>
         <%block name="title"></%block> |
         % if context_course:
         <% ctx_loc = context_course.location %>
-        ${context_course.display_name_with_default} |
+        ${context_course.display_name_with_default | h} |
         % endif
         edX Studio
     </title>
@@ -34,7 +40,7 @@
     <%block name="header_extras"></%block>
   </head>
 
-  <body class="<%block name='bodyclass'></%block> hide-wip lang_${LANGUAGE_CODE}">
+  <body class="${dir_rtl} <%block name='bodyclass'></%block> hide-wip lang_${LANGUAGE_CODE}">
   <%block name="view_notes"></%block>
 
     <a class="nav-skip" href="#content">${_("Skip to this view's content")}</a>
@@ -68,7 +74,6 @@
             "jquery.immediateDescendents": "coffee/src/jquery.immediateDescendents",
             "datepair": "js/vendor/timepicker/datepair",
             "date": "js/vendor/date",
-            "tzAbbr": "js/vendor/tzAbbr",
             "underscore": "js/vendor/underscore-min",
             "underscore.string": "js/vendor/underscore.string.min",
             "backbone": "js/vendor/backbone-min",
@@ -329,7 +334,7 @@
         <script type="text/javascript">
         require(['js/models/course'], function(Course) {
             window.course = new Course({
-                id: "${context_course.id}",
+                id: "${context_course.id | escapejs}",
                 name: "${context_course.display_name_with_default | h}",
                 url_name: "${context_course.location.name | h}",
                 org: "${context_course.location.org | h}",
@@ -341,7 +346,7 @@
     % endif
 
     <!-- view -->
-    <div class="wrapper wrapper-view">
+    <div class="wrapper wrapper-view" dir="${dir_rtl}">
         <% online_help_token = self.online_help_token() if hasattr(self, 'online_help_token') else None %>
         <%include file="widgets/header.html" args="online_help_token=online_help_token" />
 

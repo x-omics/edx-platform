@@ -25,7 +25,7 @@ from xmodule.errortracker import exc_info_to_str
 from xmodule.modulestore.exceptions import ItemNotFoundError
 from opaque_keys.edx.keys import UsageKey
 from xmodule.exceptions import UndefinedContext
-from dogapi import dog_stats_api
+import dogstats_wrapper as dog_stats_api
 
 
 log = logging.getLogger(__name__)
@@ -199,6 +199,26 @@ class XModuleMixin(XBlockMixin):
         # use display_name_with_default for those
         default=None
     )
+
+    def __init__(self, *args, **kwargs):
+        self.xmodule_runtime = None
+        super(XModuleMixin, self).__init__(*args, **kwargs)
+
+    @property
+    def runtime(self):
+        # Handle XModule backwards compatibility. If this is a pure
+        # XBlock, and it has an xmodule_runtime defined, then we're in
+        # an XModule context, not an XModuleDescriptor context,
+        # so we should use the xmodule_runtime (ModuleSystem) as the runtime.
+        if (not isinstance(self, (XModule, XModuleDescriptor)) and
+            self.xmodule_runtime is not None):
+            return self.xmodule_runtime
+        return self._runtime
+
+    @runtime.setter
+    def runtime(self, value):
+        self._runtime = value
+
 
     @property
     def system(self):
@@ -1187,9 +1207,8 @@ class DescriptorSystem(MetricsMixin, ConfigurableFragmentWrapper, Runtime):  # p
             return super(DescriptorSystem, self).render(block, view_name, context)
 
     def handler_url(self, block, handler_name, suffix='', query='', thirdparty=False):
-        xmodule_runtime = getattr(block, 'xmodule_runtime', None)
-        if xmodule_runtime is not None:
-            return xmodule_runtime.handler_url(block, handler_name, suffix, query, thirdparty)
+        if block.xmodule_runtime is not None:
+            return block.xmodule_runtime.handler_url(block, handler_name, suffix, query, thirdparty)
         else:
             # Currently, Modulestore is responsible for instantiating DescriptorSystems
             # This means that LMS/CMS don't have a way to define a subclass of DescriptorSystem
@@ -1201,9 +1220,8 @@ class DescriptorSystem(MetricsMixin, ConfigurableFragmentWrapper, Runtime):  # p
         """
         See :meth:`xblock.runtime.Runtime:local_resource_url` for documentation.
         """
-        xmodule_runtime = getattr(block, 'xmodule_runtime', None)
-        if xmodule_runtime is not None:
-            return xmodule_runtime.local_resource_url(block, uri)
+        if block.xmodule_runtime is not None:
+            return block.xmodule_runtime.local_resource_url(block, uri)
         else:
             # Currently, Modulestore is responsible for instantiating DescriptorSystems
             # This means that LMS/CMS don't have a way to define a subclass of DescriptorSystem
@@ -1221,9 +1239,8 @@ class DescriptorSystem(MetricsMixin, ConfigurableFragmentWrapper, Runtime):  # p
         """
         See :meth:`xblock.runtime.Runtime:publish` for documentation.
         """
-        xmodule_runtime = getattr(block, 'xmodule_runtime', None)
-        if xmodule_runtime is not None:
-            return xmodule_runtime.publish(block, event_type, event)
+        if block.xmodule_runtime is not None:
+            return block.xmodule_runtime.publish(block, event_type, event)
 
     def add_block_as_child_node(self, block, node):
         child = etree.SubElement(node, "unknown")
@@ -1263,7 +1280,7 @@ class ModuleSystem(MetricsMixin, ConfigurableFragmentWrapper, Runtime):  # pylin
             cache=None, can_execute_unsafe_code=None, replace_course_urls=None,
             replace_jump_to_id_urls=None, error_descriptor_class=None, get_real_user=None,
             field_data=None, get_user_role=None, rebind_noauth_module_to_user=None,
-            user_location=None, **kwargs):
+            user_location=None, get_python_lib_zip=None, **kwargs):
         """
         Create a closure around the system environment.
 
@@ -1312,6 +1329,10 @@ class ModuleSystem(MetricsMixin, ConfigurableFragmentWrapper, Runtime):  # pylin
         can_execute_unsafe_code - A function returning a boolean, whether or
             not to allow the execution of unsafe, unsandboxed code.
 
+        get_python_lib_zip - A function returning a bytestring or None.  The
+            bytestring is the contents of a zip file that should be importable
+            by other Python code running in the module.
+
         error_descriptor_class - The class to use to render XModules with errors
 
         get_real_user - function that takes `anonymous_student_id` and returns real user_id,
@@ -1353,6 +1374,7 @@ class ModuleSystem(MetricsMixin, ConfigurableFragmentWrapper, Runtime):  # pylin
 
         self.cache = cache or DoNothingCache()
         self.can_execute_unsafe_code = can_execute_unsafe_code or (lambda: False)
+        self.get_python_lib_zip = get_python_lib_zip or (lambda: None)
         self.replace_course_urls = replace_course_urls
         self.replace_jump_to_id_urls = replace_jump_to_id_urls
         self.error_descriptor_class = error_descriptor_class
